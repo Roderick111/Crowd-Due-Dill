@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Token Debug</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- Load the same scripts as main app -->
+    <script src="/config/config.js?v=<?php echo time(); ?>"></script>
+    <script>
+      (function() {
+        const script = document.createElement('script');
+        script.src = '/config/secrets.js?v=' + Date.now();
+        script.onerror = () => console.warn('⚠️ secrets.js not found');
+        document.head.appendChild(script);
+      })();
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js"></script>
+</head>
+<body>
+    <h1>JWT Token Debug</h1>
+    <button onclick="debugToken()">Debug Current Token</button>
+    <button onclick="testStripeAuth()">Test Stripe Auth</button>
+    <pre id="output"></pre>
+
+    <script>
+        // Wait for Auth0 to load
+        async function waitForAuth0() {
+            let attempts = 0;
+            while (attempts < 20) {
+                if (typeof auth0 !== 'undefined' && window.getAuth0State) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+                attempts++;
+            }
+            throw new Error('Auth0 not loaded after 10 seconds');
+        }
+
+        async function debugToken() {
+            const output = document.getElementById('output');
+            
+            try {
+                output.textContent = 'Loading Auth0...';
+                await waitForAuth0();
+                
+                // Get current auth state
+                const authState = await window.getAuth0State();
+                
+                if (!authState.isAuthenticated) {
+                    output.textContent = 'Not authenticated - please login first';
+                    return;
+                }
+                
+                const token = authState.accessToken;
+                
+                // Decode JWT (just the payload, not verifying signature)
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    output.textContent = 'Invalid JWT format';
+                    return;
+                }
+                
+                const header = JSON.parse(atob(parts[0]));
+                const payload = JSON.parse(atob(parts[1]));
+                
+                const debugInfo = {
+                    tokenLength: token.length,
+                    header: header,
+                    payload: {
+                        iss: payload.iss,
+                        aud: payload.aud,
+                        sub: payload.sub,
+                        scope: payload.scope,
+                        exp: new Date(payload.exp * 1000).toISOString(),
+                        iat: new Date(payload.iat * 1000).toISOString(),
+                        // Include any other relevant claims
+                        ...Object.fromEntries(
+                            Object.entries(payload).filter(([key]) => 
+                                !['iss', 'aud', 'sub', 'scope', 'exp', 'iat'].includes(key)
+                            )
+                        )
+                    }
+                };
+                
+                output.textContent = JSON.stringify(debugInfo, null, 2);
+                
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message + '\n\nAvailable functions:\n' + 
+                    Object.keys(window).filter(k => k.includes('auth') || k.includes('Auth')).join('\n');
+            }
+        }
+
+        async function testStripeAuth() {
+            const output = document.getElementById('output');
+            
+            try {
+                output.textContent = 'Testing Stripe authentication...';
+                
+                // Test if apiService exists
+                if (!window.apiService) {
+                    output.textContent = 'Error: window.apiService not found';
+                    return;
+                }
+                
+                // Clear auth cache
+                if (window.apiService._clearAuthCache) {
+                    window.apiService._clearAuthCache();
+                    output.textContent += '\n✅ Cleared auth cache';
+                }
+                
+                // Test auth headers
+                const authHeaders = await window.apiService._getAuthHeaders();
+                output.textContent += '\n\nAuth headers: ' + JSON.stringify(authHeaders, null, 2);
+                
+                // Test Stripe config endpoint (no auth required)
+                const stripeConfig = await window.apiService.makeRequest('/stripe/config');
+                output.textContent += '\n\nStripe config: ' + JSON.stringify(stripeConfig, null, 2);
+                
+                // Test Stripe checkout (auth required)
+                try {
+                    const checkoutResponse = await window.apiService.makeRequest('/stripe/create-checkout-session', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ 
+                            plan_type: 'monthly'
+                        })
+                    });
+                    output.textContent += '\n\n✅ Stripe checkout SUCCESS: ' + JSON.stringify(checkoutResponse, null, 2);
+                } catch (stripeError) {
+                    output.textContent += '\n\n❌ Stripe checkout FAILED: ' + stripeError.message;
+                }
+                
+            } catch (error) {
+                output.textContent += '\n\nError: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚖️ Crowdfunding Due Diligence</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>" type="image/svg+xml">
+    
+    <!-- Handle Auth0 callback redirect from /web/ to root -->
+    <script>
+      (function() {
+        // If we're on /web/ path with Auth0 callback parameters, redirect to root
+        if (window.location.pathname === '/web/' && (window.location.search.includes('code=') || window.location.search.includes('state='))) {
+          console.log('🔄 Redirecting Auth0 callback from /web/ to root...');
+          const newUrl = window.location.origin + '/' + window.location.search + window.location.hash;
+          window.location.replace(newUrl);
+          return;
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/themes.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    
+    <!-- Frontend Configuration System -->
+    <script src="/config/config.js"></script>
+    
+    <!-- Load secrets if available (optional, for sensitive config) -->
+    <script>
+      // Try to load secrets.js if it exists, but don't fail if it doesn't
+      (function() {
+        const script = document.createElement('script');
+        script.src = '/config/secrets.js';
+        script.onerror = () => console.warn('⚠️ secrets.js not found - Auth0 will not work without proper configuration');
+        document.head.appendChild(script);
+      })();
+    </script>
+    
+    <!-- Auth0 SPA SDK with fallback -->
+    <script>
+      // Load Auth0 SDK with fallback
+      (function() {
+        const primaryCDN = 'https://cdn.auth0.com/js/auth0-spa-js/2.1/auth0-spa-js.production.js';
+        const fallbackCDN = 'https://cdn.jsdelivr.net/npm/@auth0/auth0-spa-js@2.1.3/dist/auth0-spa-js.production.js';
+        
+        function loadScript(src, onSuccess, onError) {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = onSuccess;
+          script.onerror = onError;
+          document.head.appendChild(script);
+        }
+        
+        console.log('📦 Loading Auth0 SDK from primary CDN...');
+        loadScript(primaryCDN, 
+          () => console.log('✅ Auth0 SDK loaded from primary CDN'),
+          () => {
+            console.warn('⚠️ Primary CDN failed, trying fallback...');
+            loadScript(fallbackCDN,
+              () => console.log('✅ Auth0 SDK loaded from fallback CDN'),
+              () => console.error('❌ Both CDNs failed to load Auth0 SDK')
+            );
+          }
+        );
+      })();
+    </script>
+    
+    <style>
+        /* Global reset for proper height handling */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        #root {
+            height: 100vh;
+            width: 100%;
+        }
+        
+        /* Custom scrollbar for chat */
+        .chat-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-scroll::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" src="/hooks/useTheme.js"></script>
+    <script type="text/babel" src="/components/ThemeSwitcher.js"></script>
+    <script type="text/babel" src="/services/apiService.js"></script>
+    <script type="text/babel" src="/services/auth0Service.js"></script>
+    <script type="text/babel" src="/services/stripeService.js"></script>
+    <script type="text/babel" src="/hooks/useAuth.js"></script>
+    <script type="text/babel" src="/components/AuthButton.js"></script>
+    <script type="text/babel" src="/components/AuthStatusBanner.js"></script>
+
+    <script type="text/babel" src="/components/PremiumModal.js"></script>
+    <script type="text/babel" src="/components/SidebarAuthButton.js"></script>
+    <script type="text/babel" src="/components/TopBarUserProfile.js"></script>
+
+    <script type="text/babel" src="/components/MessageActions.js"></script>
+    <script type="text/babel" src="/components/ConversationStarters.js"></script>
+    <script type="text/babel" src="/components/Sidebar.js"></script>
+    <script type="text/babel" src="/components/ChatArea.js"></script>
+    <script type="text/babel" src="/components/TopBar.js"></script>
+    <script type="text/babel" src="/components/Modals.js"></script>
+    <script type="text/babel" src="/components/ArchivedSessions.js"></script>
+    <script type="text/babel" src="/hooks/useAppLogic.js"></script>
+    <script type="text/babel" src="/app.js"></script>
+    <script>
+      // Initialize Auth0 with improved error handling and timing
+      (async function() {
+        let initAttempts = 0;
+        const maxAttempts = 10; // Increased attempts
+        const retryDelay = 500; // Reduced delay for faster retries
+
+        async function waitForAuth0SDK() {
+          return new Promise((resolve, reject) => {
+            const checkAuth0 = () => {
+              if (typeof auth0 !== 'undefined' && auth0.createAuth0Client) {
+                resolve(true);
+              } else if (initAttempts >= maxAttempts) {
+                reject(new Error(`Auth0 SDK failed to load after ${maxAttempts} attempts. This may be due to network issues or CDN problems.`));
+              } else {
+                initAttempts++;
+                console.log(`⏳ Waiting for Auth0 SDK... (attempt ${initAttempts}/${maxAttempts})`);
+                setTimeout(checkAuth0, retryDelay);
+              }
+            };
+            checkAuth0();
+          });
+        }
+
+        try {
+          console.log('🚀 Starting Auth0 initialization...');
+          
+          // Wait for Auth0 SDK to load
+          await waitForAuth0SDK();
+          console.log('✅ Auth0 SDK loaded successfully');
+          
+          // Wait for Auth0 service (Babel compilation) - increased time
+          console.log('⏳ Waiting for Auth0 service to compile...');
+          await new Promise(resolve => setTimeout(resolve, 8000)); // Increased to 8 seconds
+          
+          if (!window.initAuth0) {
+            console.warn('⚠️ Auth0 service not ready after 3 seconds, trying anyway...');
+          }
+          
+          // Initialize Auth0
+          if (window.initAuth0) {
+            await window.initAuth0();
+            console.log('✅ Auth0 initialization complete');
+            
+            // Auth0 ready - other services can initialize as needed
+            
+            // Remove any existing error banners
+            const existingError = document.querySelector('.auth-error-banner');
+            if (existingError) {
+              existingError.remove();
+            }
+          } else {
+            throw new Error('Auth0 service not available after waiting');
+          }
+        } catch (error) {
+          console.error('❌ Auth0 initialization failed:', error);
+          
+          // Show user-friendly error with more details
+          const errorDiv = document.createElement('div');
+          errorDiv.className = 'auth-error-banner';
+          errorDiv.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #dc2626;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            z-index: 9999;
+            font-family: system-ui, -apple-system, sans-serif;
+          `;
+          
+          let errorMessage = '⚠️ Authentication service failed to load. Please refresh the page.';
+          
+          errorDiv.innerHTML = `
+            ${errorMessage} Please refresh the page.
+            <button onclick="window.location.reload()" style="margin-left: 10px; padding: 4px 8px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 4px; cursor: pointer;">
+              Refresh
+            </button>
+            <button onclick="this.parentElement.style.display='none'" style="margin-left: 5px; padding: 4px 8px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 4px; cursor: pointer;">
+              Dismiss
+            </button>
+          `;
+          document.body.appendChild(errorDiv);
+          
+          // Auto-dismiss after 15 seconds (increased time)
+          setTimeout(() => {
+            if (errorDiv.parentElement) {
+              errorDiv.style.opacity = '0';
+              errorDiv.style.transition = 'opacity 0.5s';
+              setTimeout(() => {
+                if (errorDiv.parentElement) {
+                  errorDiv.remove();
+                }
+              }, 500);
+            }
+          }, 15000);
+        }
+      })();
+    </script>
+
+</body>
+</html> 

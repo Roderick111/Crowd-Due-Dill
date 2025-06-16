@@ -1,0 +1,402 @@
+/**
+ * themes.css - Theme Variables and Styles
+ * Purpose: Define CSS variables for light and dark themes
+ */
+
+/* Default theme (dark) */
+:root {
+  --bg-primary: #101827;
+  --bg-secondary: #1f2937;
+  --bg-tertiary: #374151;
+  --bg-hover: #4b5563;
+  --border-color: #6b7280;
+  --text-primary: #ffffff;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --accent-blue: #3b82f6;
+  --accent-blue-hover: #2563eb;
+  --accent-red: #ef4444;
+  --gradient-from: #8b5cf6;
+  --gradient-to: #3b82f6;
+}
+
+/* Light theme */
+[data-theme="light"], 
+.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-hover: #f1f5f9;
+  --border-color: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --accent-blue: #93c5fd;
+  --accent-blue-hover: #60a5fa;
+  --accent-red: #ef4444;
+  --gradient-from: #8b5cf6;
+  --gradient-to: #3b82f6;
+}
+
+/* Apply theme variables to existing classes */
+body {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Override any inline styles */
+[data-theme="light"] body,
+.light body {
+  background-color: var(--bg-primary) !important;
+}
+
+[data-theme="dark"] body,
+.dark body {
+  background-color: var(--bg-primary) !important;
+}
+
+/* Update existing Tailwind-like classes to use CSS variables */
+.bg-gray-900 { background-color: var(--bg-primary) !important; }
+.bg-gray-800 { background-color: var(--bg-secondary) !important; }
+.bg-gray-700 { background-color: var(--bg-tertiary) !important; }
+.bg-gray-600 { background-color: var(--bg-hover) !important; }
+
+/* Ensure main app container uses theme variables */
+#root > div,
+.flex.h-screen {
+  background-color: var(--bg-primary) !important;
+}
+
+.text-white { color: var(--text-primary) !important; }
+.text-gray-100 { color: var(--text-primary) !important; }
+.text-gray-300 { color: var(--text-secondary) !important; }
+.text-gray-400 { color: var(--text-muted) !important; }
+.text-gray-500 { color: var(--text-muted) !important; }
+
+.border-gray-700 { border-color: var(--border-color) !important; }
+.border-gray-600 { border-color: var(--border-color) !important; }
+
+.bg-blue-600 { background-color: var(--accent-blue) !important; }
+.bg-blue-700 { background-color: var(--accent-blue-hover) !important; }
+.hover\:bg-blue-700:hover { background-color: var(--accent-blue-hover) !important; }
+
+/* Disabled button states */
+.disabled\:bg-gray-600:disabled { 
+  background-color: var(--bg-hover) !important; 
+  cursor: not-allowed;
+}
+
+/* Light theme disabled button */
+[data-theme="light"] .disabled\:bg-gray-600:disabled,
+.light .disabled\:bg-gray-600:disabled {
+  background-color: #cbd5e1 !important;
+  color: #64748b !important;
+}
+
+/* Ensure active button states work correctly */
+button:not(:disabled).bg-blue-600 {
+  background-color: var(--accent-blue) !important;
+}
+
+button:not(:disabled).bg-blue-600:hover {
+  background-color: var(--accent-blue-hover) !important;
+}
+
+/* Better hover effects for both themes */
+.hover\:bg-gray-700:hover { background-color: var(--bg-hover) !important; }
+.hover\:bg-gray-600:hover { background-color: var(--bg-hover) !important; }
+
+/* Light theme specific hover adjustments */
+[data-theme="light"] .hover\:bg-gray-700:hover,
+.light .hover\:bg-gray-700:hover {
+  background-color: #f1f5f9 !important;
+}
+
+[data-theme="light"] .hover\:bg-gray-600:hover,
+.light .hover\:bg-gray-600:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Light theme specific adjustments */
+[data-theme="light"] .bg-transparent,
+.light .bg-transparent {
+  background-color: transparent !important;
+}
+
+/* Ensure proper contrast in light mode */
+[data-theme="light"] .chat-scroll::-webkit-scrollbar-track,
+.light .chat-scroll::-webkit-scrollbar-track {
+  background: #e2e8f0;
+}
+
+[data-theme="light"] .chat-scroll::-webkit-scrollbar-thumb,
+.light .chat-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+}
+
+[data-theme="light"] .chat-scroll::-webkit-scrollbar-thumb:hover,
+.light .chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Theme switcher button styling */
+[data-theme="light"] .bg-gray-700,
+.light .bg-gray-700 {
+  background-color: #e2e8f0 !important;
+}
+
+[data-theme="light"] .hover\:bg-gray-600:hover,
+.light .hover\:bg-gray-600:hover {
+  background-color: #cbd5e1 !important;
+}
+
+/* Theme switcher icon colors */
+[data-theme="light"] .text-yellow-400,
+.light .text-yellow-400 {
+  color: #f59e0b !important;
+}
+
+[data-theme="light"] .text-gray-600,
+.light .text-gray-600 {
+  color: #4b5563 !important;
+}
+
+/* Theme switcher half-circle icon styling */
+[data-theme="dark"] svg,
+.dark svg {
+  color: #e5e7eb;
+}
+
+[data-theme="light"] svg,
+.light svg {
+  color: #374151;
+}
+
+/* Modal theming */
+/* Light theme modal backgrounds */
+[data-theme="light"] .bg-gradient-to-br,
+.light .bg-gradient-to-br {
+  background: linear-gradient(to bottom right, #f8fafc, #e2e8f0, #f8fafc) !important;
+}
+
+[data-theme="light"] .bg-slate-700\/50,
+.light .bg-slate-700\/50 {
+  background-color: rgba(248, 250, 252, 0.8) !important;
+  border-color: rgba(203, 213, 225, 0.5) !important;
+}
+
+[data-theme="light"] .border-slate-600\/30,
+.light .border-slate-600\/30 {
+  border-color: rgba(203, 213, 225, 0.3) !important;
+}
+
+[data-theme="light"] .border-slate-600\/50,
+.light .border-slate-600\/50 {
+  border-color: rgba(203, 213, 225, 0.5) !important;
+}
+
+[data-theme="light"] .border-slate-600,
+.light .border-slate-600 {
+  border-color: #cbd5e1 !important;
+}
+
+/* Light theme text colors in modals */
+[data-theme="light"] .text-white,
+.light .text-white {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .text-gray-300,
+.light .text-gray-300 {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="light"] .text-gray-400,
+.light .text-gray-400 {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="light"] .text-purple-200,
+.light .text-purple-200 {
+  color: #7c3aed !important;
+}
+
+/* Light theme icon backgrounds */
+[data-theme="light"] .bg-yellow-500\/20,
+.light .bg-yellow-500\/20 {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+[data-theme="light"] .bg-blue-500\/20,
+.light .bg-blue-500\/20 {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+[data-theme="light"] .bg-purple-500\/20,
+.light .bg-purple-500\/20 {
+  background-color: rgba(124, 58, 237, 0.2) !important;
+}
+
+/* Light theme icon colors - make them much more visible */
+[data-theme="light"] .text-yellow-400,
+.light .text-yellow-400 {
+  color: #d97706 !important;
+}
+
+[data-theme="light"] .text-blue-400,
+.light .text-blue-400 {
+  color: #2563eb !important;
+}
+
+[data-theme="light"] .text-purple-400,
+.light .text-purple-400 {
+  color: #7c3aed !important;
+}
+
+[data-theme="light"] .text-purple-300,
+.light .text-purple-300 {
+  color: #8b5cf6 !important;
+}
+
+/* Light theme gradient insights */
+[data-theme="light"] .bg-gradient-to-r,
+.light .bg-gradient-to-r {
+  background: linear-gradient(to right, rgba(124, 58, 237, 0.1), rgba(59, 130, 246, 0.1)) !important;
+}
+
+[data-theme="light"] .border-purple-500\/30,
+.light .border-purple-500\/30 {
+  border-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+/* Light theme modal hover effects */
+[data-theme="light"] .hover\:bg-slate-700:hover,
+.light .hover\:bg-slate-700:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Safari-compatible theme transitions - use shorter duration and single property transitions */
+*,
+*::before,
+*::after {
+  transition: all 0.1s ease !important;
+}
+
+/* Safari-specific fixes - disable transitions on theme switch to prevent staggered animations */
+@supports (-webkit-appearance: none) {
+  /* Safari detection */
+  [data-theme] *,
+  [data-theme] *::before,
+  [data-theme] *::after {
+    transition: none !important;
+  }
+  
+  /* Re-enable transitions after theme switch with delay */
+  [data-theme].theme-transitioning *,
+  [data-theme].theme-transitioning *::before,
+  [data-theme].theme-transitioning *::after {
+    transition: all 0.05s ease !important;
+  }
+}
+
+/* Specific element transitions for consistent behavior across browsers */
+body,
+html,
+div,
+span,
+button,
+input,
+h1, h2, h3, h4, h5, h6,
+p,
+svg,
+path {
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease, fill 0.1s ease !important;
+}
+
+/* Critical UI elements with no transition delay */
+.text-white,
+.text-gray-100,
+.text-gray-300,
+.text-gray-400,
+.text-gray-500,
+.bg-gray-900,
+.bg-gray-800, 
+.bg-gray-700,
+.bg-gray-600,
+.border-gray-700,
+.border-gray-600 {
+  transition: all 0.05s ease !important;
+}
+
+/* Active domain button styling - use same blue as bubbles/buttons */
+.bg-green-600 { 
+  background-color: var(--accent-blue) !important;
+  color: white !important;
+}
+
+.hover\:bg-green-700:hover { 
+  background-color: var(--accent-blue-hover) !important;
+  color: white !important;
+}
+
+/* Light theme active domain buttons - use light blue with dark text */
+[data-theme="light"] .bg-green-600,
+.light .bg-green-600 {
+  background-color: var(--accent-blue) !important;
+  color: #1e293b !important;
+}
+
+[data-theme="light"] .hover\:bg-green-700:hover,
+.light .hover\:bg-green-700:hover {
+  background-color: var(--accent-blue-hover) !important;
+  color: #0f172a !important;
+} 
+
+/* Go Premium Button - Colorful Gradient Design */
+button.go-premium-button {
+  position: relative !important;
+  background-color: #18181b !important; /* Dark zinc background for dark theme */
+  border: none !important;
+  overflow: hidden !important;
+  transition: all 0.2s ease !important;
+  color: #ffffff !important;
+}
+
+/* Gradient background effect */
+button.go-premium-button::before {
+  content: '' !important;
+  position: absolute !important;
+  inset: 0 !important;
+  background: linear-gradient(to right, #6366f1, #8b5cf6, #ec4899) !important; /* indigo -> purple -> pink */
+  opacity: 0.4 !important;
+  filter: blur(1px) !important;
+  transition: opacity 0.5s ease !important;
+  z-index: 1 !important;
+}
+
+button.go-premium-button:hover::before {
+  opacity: 0.8 !important;
+}
+
+/* Content positioning */
+button.go-premium-button > * {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* Light theme adjustments */
+[data-theme="light"] button.go-premium-button,
+.light button.go-premium-button {
+  background-color: #f4f4f5 !important; /* Light zinc background for light theme */
+  color: #18181b !important; /* Dark text for light theme */
+}
+
+[data-theme="light"] button.go-premium-button svg,
+.light button.go-premium-button svg {
+  color: rgba(24, 24, 27, 0.9) !important; /* Dark icon for light theme */
+}
+
+/* Dark theme icon color */
+button.go-premium-button svg {
+  color: rgba(255, 255, 255, 0.9) !important; /* Light icon for dark theme */
+}

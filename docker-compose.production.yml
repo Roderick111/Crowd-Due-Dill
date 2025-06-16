@@ -1,0 +1,136 @@
+# Production Docker Compose for Esoteric Vectors
+# Pulls image from Docker Hub: daniel1mathias/esoteric-vectors:latest
+# Domain: mystical-mentor.beautiful-apps.com (HTTPS)
+
+version: '3.8'
+
+services:
+  # Backend FastAPI application (from Docker Hub)
+  backend:
+    image: daniel1mathias/esoteric-vectors:latest
+    container_name: esoteric-backend
+    restart: unless-stopped
+    environment:
+      # Application settings
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      
+      # API settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      
+      # Auth0 settings (from environment)
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+      - AUTH0_CLIENT_SECRET=${AUTH0_CLIENT_SECRET}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      
+      # Stripe settings (from environment)
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      
+      # OpenAI settings (from environment)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Google AI settings (from environment)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      
+      # Application URLs
+      - FRONTEND_URL=https://mystical-mentor.beautiful-apps.com
+      - BACKEND_URL=http://mystical-mentor.beautiful-apps.com/api
+      
+      # Database and storage paths
+      - DATA_PATH=/app/data
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - SESSIONS_PATH=/app/data/sessions
+      - QA_CACHE_PATH=/app/data/qa
+      
+    volumes:
+      # Persistent data storage
+      - ./data:/app/data
+      - ./logs:/app/logs
+      
+      # Configuration files
+      - ./.env:/app/.env:ro
+      
+    ports:
+      - "8001:8001"
+    
+    networks:
+      - esoteric_network
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Nginx reverse proxy with HTTPS
+  nginx:
+    image: nginx:alpine
+    container_name: esoteric-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"     # HTTP (redirects to HTTPS)
+      - "443:443"   # HTTPS
+    
+    volumes:
+      # Nginx configuration
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      
+      # Static web files
+      - ./web:/usr/share/nginx/html:ro
+      
+      # Nginx logs
+      - ./nginx/logs:/var/log/nginx
+      
+      # Mount Let's Encrypt SSL certificates
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    
+    networks:
+      - esoteric_network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    depends_on:
+      - backend
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+# Custom network for service communication
+networks:
+  esoteric_network:
+    driver: bridge
+    name: esoteric_network
+
+# Resource limits and monitoring
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3" 

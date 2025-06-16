@@ -1,0 +1,28 @@
+# Contextual RAG Implementation Dependencies - Phase 1
+
+# Core LangChain packages
+langchain
+langchain-community
+langchain-core
+langchain-text-splitters
+
+# LangGraph for workflow management
+langgraph
+
+# Vector database and embeddings
+langchain-chroma
+chromadb
+langchain-openai
+
+# Environment and utilities
+python-dotenv
+pydantic
+typing-extensions
+
+# Additional utilities
+tiktoken  # For token counting
+numpy    # For vector operations
+
+# Optional: For progress tracking and better logging
+tqdm
+colorama

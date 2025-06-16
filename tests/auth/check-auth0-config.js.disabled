@@ -1,0 +1,115 @@
+/**
+ * Auth0 Configuration Checker
+ * Run this in browser console to diagnose Auth0 403 Forbidden errors
+ */
+
+async function checkAuth0Config() {
+    console.log('🔍 Auth0 Configuration Checker');
+    console.log('================================');
+    
+    const config = {
+        domain: 'dev-d2dttzao1vs6jrmf.us.auth0.com',
+        clientId: 'TTfc367IPClXNSrHO00zbzuWgv732bl3',
+        redirectUri: `${window.location.origin}/web/`,
+        currentUrl: window.location.href
+    };
+    
+    console.log('📋 Current Configuration:');
+    console.table(config);
+    
+    // Check 1: Verify current URL matches expected pattern
+    console.log('\n🔍 Check 1: URL Pattern Validation');
+    if (config.currentUrl.includes('/web/')) {
+        console.log('✅ Current URL is in /web/ path');
+    } else {
+        console.log('⚠️ Current URL is NOT in /web/ path - this may cause issues');
+    }
+    
+    // Check 2: Test Auth0 domain connectivity
+    console.log('\n🔍 Check 2: Auth0 Domain Connectivity');
+    try {
+        const response = await fetch(`https://${config.domain}/.well-known/openid_configuration`);
+        if (response.ok) {
+            const wellKnown = await response.json();
+            console.log('✅ Auth0 domain is accessible');
+            console.log('📋 Auth0 Configuration:', {
+                issuer: wellKnown.issuer,
+                authorization_endpoint: wellKnown.authorization_endpoint,
+                token_endpoint: wellKnown.token_endpoint
+            });
+        } else {
+            console.log(`❌ Auth0 domain returned ${response.status}: ${response.statusText}`);
+        }
+    } catch (error) {
+        console.log(`❌ Failed to connect to Auth0 domain: ${error.message}`);
+    }
+    
+    // Check 3: Generate test authorization URL
+    console.log('\n🔍 Check 3: Authorization URL Test');
+    const authUrl = new URL(`https://${config.domain}/authorize`);
+    authUrl.searchParams.set('client_id', config.clientId);
+    authUrl.searchParams.set('redirect_uri', config.redirectUri);
+    authUrl.searchParams.set('scope', 'openid profile email');
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('state', 'test-state-' + Date.now());
+    
+    console.log('🔗 Test Authorization URL:');
+    console.log(authUrl.toString());
+    console.log('\n📋 URL Parameters:');
+    for (const [key, value] of authUrl.searchParams) {
+        console.log(`  ${key}: ${value}`);
+    }
+    
+    // Check 4: Required Dashboard Settings
+    console.log('\n🔍 Check 4: Required Auth0 Dashboard Settings');
+    console.log('⚠️ CRITICAL: These EXACT URLs must be configured in your Auth0 Dashboard:');
+    console.log('\n📋 Allowed Callback URLs:');
+    console.log('http://localhost:8080/web/,https://mystical-mentor.beautiful-apps.com/web/');
+    console.log('\n📋 Allowed Logout URLs:');
+    console.log('http://localhost:8080/web/,https://mystical-mentor.beautiful-apps.com/web/');
+    console.log('\n📋 Allowed Web Origins:');
+    console.log('http://localhost:8080,https://mystical-mentor.beautiful-apps.com');
+    console.log('\n📋 Allowed Origins (CORS):');
+    console.log('http://localhost:8080,https://mystical-mentor.beautiful-apps.com');
+    
+    // Check 5: Common Issues
+    console.log('\n🔍 Check 5: Common 403 Forbidden Causes');
+    console.log('❌ Most likely causes of 403 Forbidden error:');
+    console.log('  1. Missing callback URL in Auth0 Dashboard');
+    console.log('  2. Incorrect callback URL format (missing trailing slash)');
+    console.log('  3. Wrong domain or client ID');
+    console.log('  4. Application not enabled');
+    console.log('  5. CORS settings incorrect');
+    
+    // Check 6: Test the authorization URL
+    console.log('\n🔍 Check 6: Manual Test Instructions');
+    console.log('🧪 To test your Auth0 Dashboard configuration:');
+    console.log('1. Copy this URL and open it in a new tab:');
+    console.log(authUrl.toString());
+    console.log('\n2. Expected results:');
+    console.log('   ✅ SUCCESS: Redirects to Auth0 login page');
+    console.log('   ❌ FAILURE: Shows 403 Forbidden error');
+    console.log('\n3. If you see 403 Forbidden:');
+    console.log('   - Go to Auth0 Dashboard → Applications → Your App → Settings');
+    console.log('   - Add this EXACT URL to "Allowed Callback URLs":');
+    console.log(`   - ${config.redirectUri}`);
+    console.log('   - Save changes and try again');
+    
+    return {
+        config,
+        authUrl: authUrl.toString(),
+        testInstructions: 'Open the authUrl in a new tab to test your configuration'
+    };
+}
+
+// Auto-run if in browser
+if (typeof window !== 'undefined') {
+    window.checkAuth0Config = checkAuth0Config;
+    console.log('🔧 Auth0 Configuration Checker loaded!');
+    console.log('💡 Run checkAuth0Config() in console to diagnose issues');
+}
+
+// Export for Node.js if needed
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { checkAuth0Config };
+} 
