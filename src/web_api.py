@@ -1255,8 +1255,15 @@ if os.path.exists("web"):
     @app.get("/{file_path:path}")
     async def serve_static_files(file_path: str):
         """Serve static files from web directory, but only for non-API paths"""
-        # Skip API paths to avoid conflicts
-        if file_path.startswith(('api', 'auth', 'chat', 'health', 'status', 'sessions', 'domains', 'stripe', 'admin', 'command', 'favicon.ico', 'apple-touch-icon', 'robots.txt', 'manifest.json')):
+        # Skip API paths to avoid conflicts - remove the slash prefixes since routes don't have them
+        api_paths = [
+            'api', 'auth/', 'chat', 'health', 'status', 'sessions', 'domains/', 
+            'stripe/', 'admin/', 'command', 'favicon.ico', 'apple-touch-icon', 
+            'robots.txt', 'manifest.json', 'docs', 'redoc', 'openapi.json'
+        ]
+        
+        # Check if the file_path starts with any API route
+        if any(file_path.startswith(api_path) or file_path == api_path.rstrip('/') for api_path in api_paths):
             raise HTTPException(status_code=404, detail="Not found")
         
         # Serve files from web directory
