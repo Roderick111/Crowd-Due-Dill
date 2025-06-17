@@ -251,7 +251,18 @@ const Sidebar = ({
                     {/* No sessions message */}
                     {allFilteredSessions.length === 0 && (
                         <div className="text-center text-gray-400 text-sm py-4">
-                            {sessions.length === 0 ? 'No sessions found' : 'Loading sessions...'}
+                            {sessions.length === 0 ? (
+                                <div className="space-y-3">
+                                    <div className="text-gray-300 font-medium">💬 Start a conversation!</div>
+                                    <div className="text-xs text-gray-500 leading-relaxed">
+                                        Anonymous conversations are temporary.<br/>
+                                        <span className="text-blue-400 cursor-pointer hover:text-blue-300" 
+                                              onClick={() => window.authService?.login()}>
+                                            Sign in
+                                        </span> to save your chat history.
+                                    </div>
+                                </div>
+                            ) : 'Loading sessions...'}
                         </div>
                     )}
                     

@@ -342,16 +342,27 @@ def get_or_create_session(session_id: Optional[str] = None, user: Optional[Auth0
             "message_count": len(base_session_info["state"].get("messages", []))
         }
     else:
-        # For anonymous users, create regular session
-        session_info = session_manager.create_session()
-        new_session_id = session_info["thread_id"]
+        # For anonymous users, create temporary session (not persisted)
+        # Generate a temporary session ID for this conversation
+        import uuid
+        temp_session_id = f"temp_{uuid.uuid4().hex[:8]}"
         
-        return new_session_id, {
-            "state": session_info["state"],
-            "config": session_info["config"],
-            "created_at": session_info["state"].get("session_metadata", {}).get("created_at"),
-            "last_activity": session_info["state"].get("session_metadata", {}).get("last_activity"),
-            "message_count": len(session_info["state"].get("messages", []))
+        # Create minimal session state for temporary use
+        temp_state = {
+            "messages": [],
+            "session_metadata": {
+                "created_at": datetime.now().isoformat(),
+                "last_activity": datetime.now().isoformat(),
+                "temporary": True
+            }
+        }
+        
+        return temp_session_id, {
+            "state": temp_state,
+            "config": {"configurable": {"thread_id": temp_session_id}},
+            "created_at": temp_state["session_metadata"]["created_at"],
+            "last_activity": temp_state["session_metadata"]["last_activity"],
+            "message_count": 0
         }
 
 def update_session_activity(session_id: str):
@@ -478,27 +489,58 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         current_state = session_data["state"]
         current_config = session_data["config"]
         
+        # Check if this is a temporary session (anonymous user)
+        is_temporary = session_id.startswith("temp_")
+        
         # Sync user data if authenticated
         if user:
             await user_sync_service.sync_user(user)
         
-        web_logger.debug(f"Processing message for session {session_id[:8]}...")
+        web_logger.debug(f"Processing message for {'temporary' if is_temporary else 'persistent'} session {session_id[:8]}...")
         
         # Add user message to state
         current_state["messages"].append(HumanMessage(content=request.message))
         
-        # Process through agent graph
-        graph, _ = get_graph_and_session_manager()
-        result = graph.invoke(current_state, config=current_config)
-        
-        # Update state with result
-        current_state.update(result)
-        
-        # Update session activity
-        update_session_activity(session_id)
-        active_domains = rag_system.get_domain_status().get("active_domains", [])
-        _, session_manager = get_graph_and_session_manager()
-        session_manager.update_activity(active_domains)
+        if is_temporary:
+            # For temporary sessions, process directly without database persistence
+            # Use a simple direct approach without graph/checkpointer
+            from src.main import llm, rag_system, classify_and_decide_rag, create_agent_response
+            
+            # Create a simple state for processing
+            simple_state = {
+                "messages": current_state["messages"],
+                "session_metadata": current_state.get("session_metadata", {}),
+                "message_type": None,
+                "should_use_rag": None,
+                "rag_context": None,
+                "medium_term_summary": None,
+                "context": {},
+                "memory_settings": {},
+            }
+            
+            # Step 1: Classify the message
+            classification = classify_and_decide_rag(simple_state)
+            simple_state.update(classification)
+            
+            # Step 2: Create response based on classification
+            agent_type = "advisory" if simple_state.get("message_type") == "advisory" else "analytical"
+            response = create_agent_response(simple_state, agent_type)
+            
+            # Update the temporary state
+            current_state.update(response)
+        else:
+            # For persistent sessions, use full graph processing with database
+            graph, _ = get_graph_and_session_manager()
+            result = graph.invoke(current_state, config=current_config)
+            
+            # Update state with result
+            current_state.update(result)
+            
+            # Update session activity for persistent sessions only
+            update_session_activity(session_id)
+            active_domains = rag_system.get_domain_status().get("active_domains", [])
+            _, session_manager = get_graph_and_session_manager()
+            session_manager.update_activity(active_domains)
         
         # Extract response information
         if current_state.get("messages") and len(current_state["messages"]) > 0:
@@ -582,34 +624,9 @@ async def list_sessions(user: OptionalUser = None):
                 ))
             return sessions
         else:
-            # Anonymous user - only show anonymous sessions (no user prefix)
-            web_logger.info("Anonymous user requesting sessions - showing anonymous sessions only")
-            all_sessions = session_manager.list_sessions(limit=20)
-            
-            # Filter to only anonymous sessions (no user_ prefix)
-            anonymous_sessions = [s for s in all_sessions if not s["thread_id"].startswith("user_")]
-            
-            sessions = []
-            for session in anonymous_sessions:
-                # Parse datetime strings or use current time as fallback
-                try:
-                    created_at = datetime.fromisoformat(session["created_at"]) if session["created_at"] != "unknown" else datetime.now()
-                    last_activity = datetime.fromisoformat(session["last_activity"]) if session["last_activity"] != "unknown" else datetime.now()
-                except:
-                    created_at = datetime.now()
-                    last_activity = datetime.now()
-                
-                sessions.append(SessionInfo(
-                    session_id=session["thread_id"],
-                    title=session.get("title"),
-                    message_count=session["message_count"],
-                    created_at=created_at,
-                    last_activity=last_activity,
-                    domains=session.get("domains_used", [])
-                ))
-            
-            web_logger.info(f"Returning {len(sessions)} anonymous sessions")
-            return sessions
+            # Anonymous users get no persistent sessions - return empty list
+            web_logger.info("Anonymous user requesting sessions - returning empty list (no persistent sessions for anonymous users)")
+            return []
             
     except Exception as e:
         web_logger.error(f"Session listing error: {e}")

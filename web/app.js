@@ -55,9 +55,6 @@ function App() {
     return (
         <ThemeProvider>
             <div className="flex flex-col h-screen text-white bg-gray-900 overflow-hidden">
-                {/* Authentication Status Banner */}
-                <AuthStatusBanner />
-                
                 <div className="flex flex-1 min-h-0">
                 {/* Left Sidebar */}
             <Sidebar 

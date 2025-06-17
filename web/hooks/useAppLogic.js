@@ -104,22 +104,13 @@ const useAppLogic = () => {
                 console.log('Fetched user sessions:', data);
                 setSessions(data.sessions || []);
             } else {
-                // Fetch anonymous sessions only for non-authenticated users
-                console.log('Fetching anonymous sessions (user not authenticated)');
-                const data = await apiService.fetchSessions();
-                console.log('Fetched anonymous sessions:', data);
-                setSessions(data || []);
+                // Anonymous users get no persistent sessions
+                console.log('Anonymous user - no persistent sessions available');
+                setSessions([]);
             }
         } catch (error) {
             console.error('Error fetching sessions:', error);
-            // Fallback to anonymous sessions on error
-            try {
-                const data = await apiService.fetchSessions();
-                setSessions(data || []);
-            } catch (fallbackError) {
-                console.error('Error fetching fallback sessions:', fallbackError);
-                setSessions([]);
-            }
+            setSessions([]);
         }
     };
 
