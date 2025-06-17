@@ -321,16 +321,38 @@ def get_or_create_session(session_id: Optional[str] = None, user: Optional[Auth0
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
     
     # Create new session only when explicitly requested (first message)
-    session_info = session_manager.create_session()
-    new_session_id = session_info["thread_id"]
-    
-    return new_session_id, {
-        "state": session_info["state"],
-        "config": session_info["config"],
-        "created_at": session_info["state"].get("session_metadata", {}).get("created_at"),
-        "last_activity": session_info["state"].get("session_metadata", {}).get("last_activity"),
-        "message_count": len(session_info["state"].get("messages", []))
-    }
+    if user:
+        # For authenticated users, create session with user prefix
+        user_prefix = f"user_{user.sub.replace('|', '_')}_"
+        base_session_info = session_manager.create_session()
+        base_session_id = base_session_info["thread_id"]
+        new_session_id = f"{user_prefix}{base_session_id}"
+        
+        # Create the user-specific session with the prefixed ID
+        config = {"configurable": {"thread_id": new_session_id}}
+        graph, _ = get_graph_and_session_manager()
+        graph.update_state(config, base_session_info["state"])
+        session_manager.current_thread_id = new_session_id
+        
+        return new_session_id, {
+            "state": base_session_info["state"],
+            "config": config,
+            "created_at": base_session_info["state"].get("session_metadata", {}).get("created_at"),
+            "last_activity": base_session_info["state"].get("session_metadata", {}).get("last_activity"),
+            "message_count": len(base_session_info["state"].get("messages", []))
+        }
+    else:
+        # For anonymous users, create regular session
+        session_info = session_manager.create_session()
+        new_session_id = session_info["thread_id"]
+        
+        return new_session_id, {
+            "state": session_info["state"],
+            "config": session_info["config"],
+            "created_at": session_info["state"].get("session_metadata", {}).get("created_at"),
+            "last_activity": session_info["state"].get("session_metadata", {}).get("last_activity"),
+            "message_count": len(session_info["state"].get("messages", []))
+        }
 
 def update_session_activity(session_id: str):
     """Update session last activity timestamp using UnifiedSessionManager"""
