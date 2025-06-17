@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
@@ -342,12 +342,19 @@ def update_session_activity(session_id: str):
 
 @app.get("/")
 async def root():
-    """Root endpoint - API information"""
-    return {
-        "message": "Crowdfunding Due Diligence API",
-        "version": "2.0.0",
-        "status": "active"
-    }
+    """Root endpoint - serve web interface"""
+    # Serve the main web interface
+    try:
+        return FileResponse("web/index.html")
+    except Exception as e:
+        web_logger.error(f"Error serving web interface: {e}")
+        # Fallback to API information if web interface fails
+        return {
+            "message": "Crowdfunding Due Diligence API",
+            "version": "2.0.0",
+            "status": "active",
+            "web_interface": "/web/index.html"
+        }
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -390,6 +397,17 @@ async def manifest_json():
                 "type": "image/x-icon"
             }
         ]
+    }
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
+    return {
+        "message": "Crowdfunding Due Diligence API",
+        "version": "2.0.0",
+        "status": "active",
+        "docs": "/docs",
+        "redoc": "/redoc"
     }
 
 @app.get("/chat")
