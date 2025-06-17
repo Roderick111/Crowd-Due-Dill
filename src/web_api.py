@@ -12,6 +12,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware

@@ -53,6 +53,15 @@ rag_system = OptimizedContextualRAGSystem(domain_manager=domain_manager)
 # Initialize memory manager with stats collector
 memory_manager = MemoryManager(llm, rag_system.stats_collector)
 
+# Simple semantic detector stub (feature disabled for now)
+class SimpleSemanticDetectorStub:
+    def is_available(self):
+        return False
+    def get_domain_suggestions(self, message, active_domains):
+        return {"needs_activation": False}
+
+semantic_detector = SimpleSemanticDetectorStub()
+
 # Session manager will be initialized after graph compilation
 
 class CombinedDecision(BaseModel):

@@ -2,7 +2,6 @@
 # AI Agent for Crowdfunding Regulation & Legal Compliance
 # Using nginx-proxy + acme-companion for automatic SSL certificates
 
-version: '3.8'
 
 services:
   # Nginx Reverse Proxy with automatic SSL

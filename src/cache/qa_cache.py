@@ -345,6 +345,16 @@ class QACache:
             'similarity_threshold': self.similarity_threshold
         }
     
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get Q&A cache statistics (alias for web API compatibility)."""
+        stats = self.get_stats()
+        return {
+            'total_pairs': stats['total_qa_pairs'],
+            'cache_hits': stats['cache_hits'],
+            'hit_rate': stats['hit_rate'],
+            'avg_response_time': stats['avg_response_time']
+        }
+    
     def clear_cache(self):
         """Clear the Q&A cache."""
         try:

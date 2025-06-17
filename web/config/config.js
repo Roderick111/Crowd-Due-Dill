@@ -34,7 +34,7 @@ const config = {
             timeout: 30000
         },
         production: {
-            baseUrl: 'https://crowd-reg.beautiful-apps.com/api',
+            baseUrl: 'https://crowd-reg.beautiful-apps.com',
             timeout: 30000
         }
     },
