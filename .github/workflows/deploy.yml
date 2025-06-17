@@ -20,19 +20,47 @@ jobs:
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         script: |
+          set -e
+          echo "🚀 Starting deployment..."
+          
+          # Navigate to project directory
           cd /root/Crowd-Due-Dill/
+          echo "📁 Current directory: $(pwd)"
+          
+          # Check git status before pull
+          echo "📋 Git status before pull:"
+          git status --porcelain
+          
+          # Pull latest changes (using HTTPS to avoid SSH key issues)
+          echo "📥 Pulling latest changes..."
+          git remote set-url origin https://github.com/Roderick111/Crowd-Due-Dill.git
           git pull origin main
+          
+          # Check if pull was successful
+          echo "📋 Git status after pull:"
+          git log --oneline -1
+          
+          # Build and deploy
+          echo "🔨 Building containers..."
           docker compose -f docker-compose.production.yml build --no-cache
+          
+          echo "🚀 Starting services..."
           docker compose -f docker-compose.production.yml up -d
           
           # Wait for services to start
+          echo "⏳ Waiting for services to start..."
           sleep 30
           
+          # Check container status
+          echo "📊 Container status:"
+          docker compose -f docker-compose.production.yml ps
+          
           # Health check
+          echo "🏥 Performing health check..."
           if curl -f https://crowd-reg.beautiful-apps.com/health; then
             echo "✅ Deployment successful"
           else
-            echo "❌ Deployment failed"
+            echo "❌ Deployment failed - showing logs:"
             docker compose -f docker-compose.production.yml logs --tail=50
             exit 1
           fi 
