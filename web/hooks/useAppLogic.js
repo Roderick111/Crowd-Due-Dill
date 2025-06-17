@@ -93,27 +93,33 @@ const useAppLogic = () => {
     // Fetch sessions
     const fetchSessions = async () => {
         try {
-            // Check if user is authenticated first
-            const authStatus = await apiService.fetchAuthStatus();
-            console.log('Auth status for session fetch:', authStatus);
+            // Check Auth0 authentication state directly
+            const authState = await window.authStateManager.getAuthState();
+            console.log('Auth state for session fetch:', authState);
             
-            if (authStatus.authenticated && authStatus.user) {
+            if (authState.isAuthenticated && authState.user && authState.accessToken) {
                 // Fetch user-specific sessions for authenticated users
-                console.log('Fetching user-specific sessions');
+                console.log('Fetching user-specific sessions for:', authState.user.email);
                 const data = await apiService.fetchUserSessions();
                 console.log('Fetched user sessions:', data);
                 setSessions(data.sessions || []);
             } else {
                 // Fetch anonymous sessions only for non-authenticated users
-                console.log('Fetching anonymous sessions');
+                console.log('Fetching anonymous sessions (user not authenticated)');
                 const data = await apiService.fetchSessions();
                 console.log('Fetched anonymous sessions:', data);
                 setSessions(data || []);
             }
         } catch (error) {
             console.error('Error fetching sessions:', error);
-            // Fallback to empty sessions on error
-            setSessions([]);
+            // Fallback to anonymous sessions on error
+            try {
+                const data = await apiService.fetchSessions();
+                setSessions(data || []);
+            } catch (fallbackError) {
+                console.error('Error fetching fallback sessions:', fallbackError);
+                setSessions([]);
+            }
         }
     };
 
