@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Q&A Cache for Esoteric Vectors
+Q&A Cache for Crowd Due Dill
 
 Clean Q&A caching system with:
 - Semantic similarity search
@@ -133,13 +133,13 @@ class QACache:
             "version": "1.3.0",
             "created": datetime.now().isoformat(),
             "embedding_model": "text-embedding-3-small",
-            "description": "Q&A cache for esoteric knowledge with question-to-question semantic matching",
+            "description": "Q&A cache for crowdfunding regulation knowledge with question-to-question semantic matching",
             "type": "qa_cache",
             "strategy": "question_embedding_question_matching",
             "domains": "lunar,ifs,astrology,crystals,numerology,tarot",
             "hnsw_config": "qa_optimized",
             "last_updated": datetime.now().isoformat(),
-            "system": "esoteric_vectors",
+            "system": "crowd_due_dill",
             "similarity_threshold": str(self.similarity_threshold)
         }
         

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple test script for the Esoteric AI Agent Web API
+Simple test script for the Crowd Due Dill AI Agent Web API
 """
 
 import requests
@@ -11,7 +11,7 @@ API_BASE = "http://localhost:8000"
 
 def test_api():
     """Test the web API endpoints"""
-    print("🧪 Testing Esoteric AI Agent Web API")
+    print("🧪 Testing Crowd Due Dill AI Agent Web API")
     print("=" * 50)
     
     try:

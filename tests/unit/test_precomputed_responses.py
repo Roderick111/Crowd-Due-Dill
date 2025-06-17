@@ -130,6 +130,6 @@ if __name__ == "__main__":
     print(f'• Instant answers (0.001-0.01s) for common questions')
     print(f'• Perfect consistency for frequently asked lunar topics')
     print(f'• Reduces load on LLM and vector database')
-    print(f'• Shaman Esoteric Guru style maintained across responses')
+    print(f'• Legal expert guidance style maintained across responses')
     print(f'• Covers top 20 most common lunar knowledge questions')
     print(f'• Fallback to similarity cache and RAG for other queries') 

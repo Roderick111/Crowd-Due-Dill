@@ -133,11 +133,11 @@ class OptimizedContextualRAGSystem:
             "version": "2.1.0",
             "created": datetime.now().isoformat(),
             "embedding_model": "text-embedding-3-small",
-            "description": "Esoteric AI knowledge base with domain-aware RAG",
+            "description": "Crowdfunding regulation knowledge base with domain-aware RAG",
             "domains": "lunar,ifs,astrology,crystals,numerology,tarot",
             "hnsw_config": "optimized",
             "last_updated": datetime.now().isoformat(),
-            "system": "esoteric_vectors"
+            "system": "crowd_due_dill"
         }
         
         collection = self.chroma_client.create_collection(

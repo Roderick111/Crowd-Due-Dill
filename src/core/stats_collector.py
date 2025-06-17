@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Stats Collector for Esoteric Vectors
+Stats Collector for Crowd Due Dill
 
 Clean statistics collection with:
 - Query performance tracking

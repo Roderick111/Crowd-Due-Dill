@@ -1,5 +1,5 @@
 """
-Stripe Service for Esoteric Vectors
+Stripe Service for Crowd Due Dill
 
 Production-ready Stripe integration for premium subscriptions.
 Handles payments, webhooks, and user role management via Auth0.
@@ -124,7 +124,7 @@ class StripeService:
                     "email": user_email,
                     "metadata": {
                         "user_id": user_id,
-                        "created_via": "esoteric_vectors_api"
+                        "created_via": "crowd_due_dill_api"
                     }
                 }
             )
@@ -197,7 +197,7 @@ class StripeService:
                 "metadata": {
                     "auth0_user_id": user_id,
                     "plan_type": plan_type,
-                    "created_via": "esoteric_vectors_api"
+                    "created_via": "crowd_due_dill_api"
                 }
             }
             
@@ -207,7 +207,7 @@ class StripeService:
                     "metadata": {
                         "auth0_user_id": user_id,
                         "plan_type": plan_type,
-                        "created_via": "esoteric_vectors_api"
+                        "created_via": "crowd_due_dill_api"
                     }
                 }
             

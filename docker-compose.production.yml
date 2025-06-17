@@ -1,14 +1,53 @@
-# Production Docker Compose for Esoteric Vectors
-# Pulls image from Docker Hub: daniel1mathias/esoteric-vectors:latest
-# Domain: mystical-mentor.beautiful-apps.com (HTTPS)
+# Production Docker Compose for Crowd Due Dill
+# AI Agent for Crowdfunding Regulation & Legal Compliance
+# Using nginx-proxy + acme-companion for automatic SSL certificates
 
 version: '3.8'
 
 services:
-  # Backend FastAPI application (from Docker Hub)
-  backend:
-    image: daniel1mathias/esoteric-vectors:latest
-    container_name: esoteric-backend
+  # Nginx Reverse Proxy with automatic SSL
+  nginx-proxy:
+    image: nginxproxy/nginx-proxy
+    container_name: crowd-due-dill-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    logging:
+      driver: "local"
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - default
+      - proxy
+
+  # Automatic SSL Certificate Management
+  acme-companion:
+    image: nginxproxy/acme-companion
+    container_name: crowd-due-dill-ssl
+    restart: always
+    environment:
+      DEFAULT_EMAIL: ${SSL_EMAIL}  # Set this in your .env file
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+      - proxy
+
+  # Crowd Due Dill Backend Application
+  crowd-due-dill-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crowd-due-dill-backend
     restart: unless-stopped
     environment:
       # Application settings
@@ -20,26 +59,35 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8001
       
+      # Automatic SSL/Proxy Configuration
+      - VIRTUAL_HOST=${DOMAIN_NAME}
+      - VIRTUAL_PORT=8001
+      - LETSENCRYPT_HOST=${DOMAIN_NAME}
+      - LETSENCRYPT_EMAIL=${SSL_EMAIL}
+      
       # Auth0 settings (from environment)
       - AUTH0_DOMAIN=${AUTH0_DOMAIN}
       - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
       - AUTH0_CLIENT_SECRET=${AUTH0_CLIENT_SECRET}
       - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      - AUTH0_MANAGEMENT_CLIENT_ID=${AUTH0_MANAGEMENT_CLIENT_ID}
+      - AUTH0_MANAGEMENT_CLIENT_SECRET=${AUTH0_MANAGEMENT_CLIENT_SECRET}
       
       # Stripe settings (from environment)
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_MONTHLY_PRICE_ID=${STRIPE_MONTHLY_PRICE_ID}
+      - STRIPE_LIFETIME_PRICE_ID=${STRIPE_LIFETIME_PRICE_ID}
       
-      # OpenAI settings (from environment)
+      # AI API keys (from environment)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      
-      # Google AI settings (from environment)
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       
-      # Application URLs
-      - FRONTEND_URL=https://mystical-mentor.beautiful-apps.com
-      - BACKEND_URL=http://mystical-mentor.beautiful-apps.com/api
+      # Application URLs (auto-configured from DOMAIN_NAME)
+      - FRONTEND_URL=https://${DOMAIN_NAME}
+      - BACKEND_URL=https://${DOMAIN_NAME}/api
+      - CORS_ORIGINS=https://${DOMAIN_NAME},https://www.${DOMAIN_NAME}
       
       # Database and storage paths
       - DATA_PATH=/app/data
@@ -47,19 +95,20 @@ services:
       - SESSIONS_PATH=/app/data/sessions
       - QA_CACHE_PATH=/app/data/qa
       
+      # Security
+      - SECRET_KEY=${SECRET_KEY}
+      
     volumes:
       # Persistent data storage
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - crowd_due_dill_data:/app/data
+      - crowd_due_dill_logs:/app/logs
       
       # Configuration files
       - ./.env:/app/.env:ro
-      
-    ports:
-      - "8001:8001"
     
     networks:
-      - esoteric_network
+      - default
+      - proxy
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -67,6 +116,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    
+    depends_on:
+      - nginx-proxy
     
     # Resource limits
     deploy:
@@ -78,59 +130,27 @@ services:
           memory: 512M
           cpus: '0.5'
 
-  # Nginx reverse proxy with HTTPS
-  nginx:
-    image: nginx:alpine
-    container_name: esoteric-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"     # HTTP (redirects to HTTPS)
-      - "443:443"   # HTTPS
-    
-    volumes:
-      # Nginx configuration
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      
-      # Static web files
-      - ./web:/usr/share/nginx/html:ro
-      
-      # Nginx logs
-      - ./nginx/logs:/var/log/nginx
-      
-      # Mount Let's Encrypt SSL certificates
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    
-    networks:
-      - esoteric_network
-    
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    
-    depends_on:
-      - backend
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.1'
+# Persistent volumes for data
+volumes:
+  conf:
+    name: crowd_due_dill_nginx_conf
+  vhost:
+    name: crowd_due_dill_nginx_vhost
+  html:
+    name: crowd_due_dill_nginx_html
+  certs:
+    name: crowd_due_dill_ssl_certs
+  acme:
+    name: crowd_due_dill_acme
+  crowd_due_dill_data:
+    name: crowd_due_dill_data
+  crowd_due_dill_logs:
+    name: crowd_due_dill_logs
 
-# Custom network for service communication
+# Networks
 networks:
-  esoteric_network:
-    driver: bridge
-    name: esoteric_network
-
-# Resource limits and monitoring
-x-logging: &default-logging
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3" 
+  default:
+    name: crowd_due_dill_network
+  proxy:
+    name: proxy
+    external: true 

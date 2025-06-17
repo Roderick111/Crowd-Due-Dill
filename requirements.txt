@@ -31,7 +31,7 @@ attrs==25.3.0
     #   jsonschema
     #   referencing
 authlib==1.6.0
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 backoff==2.2.1
     # via posthog
 bcrypt==4.3.0
@@ -51,9 +51,7 @@ cffi==1.17.1
 charset-normalizer==3.4.2
     # via requests
 chromadb==1.0.12
-    # via
-    #   esoteric-vectors (pyproject.toml)
-    #   langchain-chroma
+    # via crowd-due-dill (pyproject.toml)
 click==8.2.1
     # via
     #   typer
@@ -88,8 +86,7 @@ ephem==4.2
 executing==2.2.0
     # via stack-data
 fastapi==0.115.9
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   chromadb
 filelock==3.18.0
     # via huggingface-hub
@@ -137,7 +134,7 @@ httptools==0.6.4
     # via uvicorn
 httpx==0.28.1
     # via
-    #   esoteric-vectors (pyproject.toml)
+    #   crowd-due-dill (pyproject.toml)
     #   anthropic
     #   chromadb
     #   langgraph-sdk
@@ -160,7 +157,7 @@ importlib-metadata==8.7.0
 importlib-resources==6.5.2
     # via chromadb
 ipykernel==6.29.5
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 ipython==9.3.0
     # via ipykernel
 ipython-pygments-lexers==1.1.1
@@ -190,16 +187,15 @@ jupyter-core==5.8.1
 kubernetes==33.1.0
     # via chromadb
 langchain==0.3.25
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   langchain-community
     #   langmem
 langchain-anthropic==0.3.15
     # via langmem
 langchain-chroma==0.2.4
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 langchain-community==0.3.25
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 langchain-core==0.3.65
     # via
     #   langchain
@@ -214,16 +210,14 @@ langchain-core==0.3.65
     #   langgraph-prebuilt
     #   langmem
 langchain-google-genai==2.1.5
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 langchain-openai==0.3.22
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   langmem
 langchain-text-splitters==0.3.8
     # via langchain
 langgraph==0.4.8
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   langmem
     #   trustcall
 langgraph-checkpoint==2.0.26
@@ -233,13 +227,13 @@ langgraph-checkpoint==2.0.26
     #   langgraph-prebuilt
     #   langmem
 langgraph-checkpoint-sqlite==2.0.10
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 langgraph-prebuilt==0.2.2
     # via langgraph
 langgraph-sdk==0.1.70
     # via langgraph
 langmem==0.0.27
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 langsmith==0.3.45
     # via
     #   langchain
@@ -281,7 +275,8 @@ oauthlib==3.2.2
 onnxruntime==1.22.0
     # via chromadb
 openai==1.86.0
-    # via langchain-openai
+    # via crowd-due-dill (pyproject.toml)
+    #   langchain-community
 opentelemetry-api==1.34.1
     # via
     #   chromadb
@@ -383,9 +378,7 @@ pyasn1-modules==0.4.2
 pycparser==2.22
     # via cffi
 pydantic==2.11.5
-    # via
-    #   esoteric-vectors (pyproject.toml)
-    #   anthropic
+    # via crowd-due-dill (pyproject.toml)
     #   chromadb
     #   dydantic
     #   fastapi
@@ -402,7 +395,7 @@ pydantic-core==2.33.2
 pydantic-settings==2.9.1
     # via langchain-community
 pyephem==9.99
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 pygments==2.19.1
     # via
     #   ipython
@@ -418,12 +411,11 @@ python-dateutil==2.9.0.post0
     #   kubernetes
     #   posthog
 python-dotenv==1.1.0
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   pydantic-settings
     #   uvicorn
 python-jose==3.5.0
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 pyyaml==6.0.2
     # via
     #   chromadb
@@ -444,8 +436,7 @@ referencing==0.36.2
 regex==2024.11.6
     # via tiktoken
 requests==2.32.4
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   google-api-core
     #   huggingface-hub
     #   kubernetes
@@ -456,9 +447,9 @@ requests==2.32.4
     #   requests-oauthlib
     #   requests-toolbelt
 stripe>=8.0.0,<9.0.0
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 auth0-python>=4.0.0,<5.0.0
-    # via esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
 requests-oauthlib==2.0.0
     # via kubernetes
 requests-toolbelt==1.0.0
@@ -472,9 +463,7 @@ rpds-py==0.25.1
     #   jsonschema
     #   referencing
 rsa==4.9.1
-    # via
-    #   google-auth
-    #   python-jose
+    # via google-auth
 shellingham==1.5.4
     # via typer
 six==1.17.0
@@ -532,7 +521,7 @@ typer==0.16.0
     # via chromadb
 typing-extensions==4.14.0
     # via
-    #   esoteric-vectors (pyproject.toml)
+    #   crowd-due-dill (pyproject.toml)
     #   aiosqlite
     #   anthropic
     #   chromadb
@@ -562,8 +551,7 @@ urllib3==2.4.0
     #   kubernetes
     #   requests
 uvicorn==0.34.3
-    # via
-    #   esoteric-vectors (pyproject.toml)
+    # via crowd-due-dill (pyproject.toml)
     #   chromadb
 uvloop==0.21.0
     # via uvicorn

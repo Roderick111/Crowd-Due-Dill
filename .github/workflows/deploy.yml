@@ -1,0 +1,39 @@
+name: Deploy Crowd Due Dill to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd /opt/crowd-due-dill
+          git pull origin main
+          docker compose -f docker-compose.production.yml down
+          docker compose -f docker-compose.production.yml build --no-cache
+          docker compose -f docker-compose.production.yml up -d
+          
+          # Wait for services to start
+          sleep 30
+          
+          # Health check
+          if curl -f https://${{ secrets.DOMAIN_NAME }}/health; then
+            echo "✅ Deployment successful"
+          else
+            echo "❌ Deployment failed"
+            docker compose -f docker-compose.production.yml logs --tail=50
+            exit 1
+          fi 

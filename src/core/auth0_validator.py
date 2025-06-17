@@ -33,7 +33,7 @@ class Auth0User(BaseModel):
     given_name: Optional[str] = None
     family_name: Optional[str] = None
     
-    # Custom claims for Esoteric Vectors
+    # Custom claims for Crowd Due Dill
     memory_preferences: Optional[Dict[str, Any]] = {}
     active_domains: Optional[list] = []
     session_settings: Optional[Dict[str, Any]] = {}
@@ -266,8 +266,8 @@ class Auth0TokenValidator:
                 "family_name": payload.get("family_name"),
             }
             
-            # Extract custom claims for Esoteric Vectors
-            custom_claims = payload.get("https://esoteric-agent.com/user_metadata", {})
+            # Extract custom claims for Crowd Due Dill
+            custom_claims = payload.get("https://crowd-due-dill.com/user_metadata", {})
             user_data.update({
                 "memory_preferences": custom_claims.get("memory_preferences", {}),
                 "active_domains": custom_claims.get("active_domains", []),

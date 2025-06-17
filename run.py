@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Runner script for Esoteric Vectors RAG Chatbot
+Runner script for Crowd Due Dill - AI Agent for Crowdfunding Regulation & Legal Compliance
 """
 
 import sys

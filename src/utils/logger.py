@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Clean Logging System for Esoteric Vectors
+Clean Logging System for Crowd Due Dill
 
 Provides structured logging with debug mode support.
 Only shows important messages by default, detailed logs in debug mode.
@@ -19,9 +19,9 @@ class LogLevel(Enum):
     INFO = "info"
     DEBUG = "debug"
 
-class EsotericLogger:
+class CrowdDueDillLogger:
     """
-    Clean logger for the Esoteric Vectors system.
+    Clean logger for the Crowd Due Dill system.
     
     Shows only important messages by default:
     - System ready messages
@@ -37,10 +37,10 @@ class EsotericLogger:
         Initialize logger.
         
         Args:
-            debug_mode: Enable debug logging. If None, reads from ESOTERIC_DEBUG env var
+            debug_mode: Enable debug logging. If None, reads from CROWD_DUE_DILL_DEBUG env var
         """
         if debug_mode is None:
-            debug_mode = os.getenv('ESOTERIC_DEBUG', 'false').lower() in ('true', '1', 'yes')
+            debug_mode = os.getenv('CROWD_DUE_DILL_DEBUG', 'false').lower() in ('true', '1', 'yes')
         
         self.debug_mode = debug_mode
         self._setup_logging()
@@ -217,7 +217,7 @@ class EsotericLogger:
             print(f"🔒 AUTH DEBUG: {message}")
 
 # Global logger instance
-logger = EsotericLogger()
+logger = CrowdDueDillLogger()
 
 def set_debug_mode(enabled: bool):
     """Enable or disable debug mode globally."""

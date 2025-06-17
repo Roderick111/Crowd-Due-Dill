@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Resilience Manager for Esoteric Vectors
+Resilience Manager for Crowd Due Dill
 
 Handles all resilience concerns including:
 - Circuit breakers
