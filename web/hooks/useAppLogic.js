@@ -93,11 +93,27 @@ const useAppLogic = () => {
     // Fetch sessions
     const fetchSessions = async () => {
         try {
-            const data = await apiService.fetchSessions();
-            console.log('Fetched sessions:', data);
-            setSessions(data);
+            // Check if user is authenticated first
+            const authStatus = await apiService.fetchAuthStatus();
+            console.log('Auth status for session fetch:', authStatus);
+            
+            if (authStatus.authenticated && authStatus.user) {
+                // Fetch user-specific sessions for authenticated users
+                console.log('Fetching user-specific sessions');
+                const data = await apiService.fetchUserSessions();
+                console.log('Fetched user sessions:', data);
+                setSessions(data.sessions || []);
+            } else {
+                // Fetch anonymous sessions only for non-authenticated users
+                console.log('Fetching anonymous sessions');
+                const data = await apiService.fetchSessions();
+                console.log('Fetched anonymous sessions:', data);
+                setSessions(data || []);
+            }
         } catch (error) {
             console.error('Error fetching sessions:', error);
+            // Fallback to empty sessions on error
+            setSessions([]);
         }
     };
 

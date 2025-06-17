@@ -531,41 +531,100 @@ async def get_system_status():
         raise HTTPException(status_code=500, detail="Error retrieving system status")
 
 @app.get("/sessions", response_model=List[SessionInfo])
-async def list_sessions():
-    """List all active sessions using UnifiedSessionManager"""
+async def list_sessions(user: OptionalUser = None):
+    """List sessions - user-specific if authenticated, anonymous-only if not"""
     try:
         _, session_manager = get_graph_and_session_manager()
-        sessions_list = session_manager.list_sessions(limit=20)
         
-        sessions = []
-        for session in sessions_list:
-            # Parse datetime strings or use current time as fallback
-            try:
-                created_at = datetime.fromisoformat(session["created_at"]) if session["created_at"] != "unknown" else datetime.now()
-                last_activity = datetime.fromisoformat(session["last_activity"]) if session["last_activity"] != "unknown" else datetime.now()
-            except:
-                created_at = datetime.now()
-                last_activity = datetime.now()
+        if user:
+            # Authenticated user - redirect to user-specific sessions
+            web_logger.info(f"Authenticated user {user.sub} requesting sessions - redirecting to user-specific endpoint")
+            user_sessions_response = await get_user_sessions(user)
+            # Convert UserSessionsResponse to List[SessionInfo]
+            sessions = []
+            for session_data in user_sessions_response.sessions:
+                try:
+                    created_at = datetime.fromisoformat(session_data["created_at"]) if session_data["created_at"] != "unknown" else datetime.now()
+                    last_activity = datetime.fromisoformat(session_data["last_activity"]) if session_data["last_activity"] != "unknown" else datetime.now()
+                except:
+                    created_at = datetime.now()
+                    last_activity = datetime.now()
+                
+                sessions.append(SessionInfo(
+                    session_id=session_data["session_id"],  # Display session ID (without user prefix)
+                    title=session_data.get("title"),
+                    message_count=session_data["message_count"],
+                    created_at=created_at,
+                    last_activity=last_activity,
+                    domains=session_data.get("domains", [])
+                ))
+            return sessions
+        else:
+            # Anonymous user - only show anonymous sessions (no user prefix)
+            web_logger.info("Anonymous user requesting sessions - showing anonymous sessions only")
+            all_sessions = session_manager.list_sessions(limit=20)
             
-            sessions.append(SessionInfo(
-                session_id=session["thread_id"],
-                title=session.get("title"),
-                message_count=session["message_count"],
-                created_at=created_at,
-                last_activity=last_activity,
-                domains=session.get("domains_used", [])
-            ))
-        return sessions
+            # Filter to only anonymous sessions (no user_ prefix)
+            anonymous_sessions = [s for s in all_sessions if not s["thread_id"].startswith("user_")]
+            
+            sessions = []
+            for session in anonymous_sessions:
+                # Parse datetime strings or use current time as fallback
+                try:
+                    created_at = datetime.fromisoformat(session["created_at"]) if session["created_at"] != "unknown" else datetime.now()
+                    last_activity = datetime.fromisoformat(session["last_activity"]) if session["last_activity"] != "unknown" else datetime.now()
+                except:
+                    created_at = datetime.now()
+                    last_activity = datetime.now()
+                
+                sessions.append(SessionInfo(
+                    session_id=session["thread_id"],
+                    title=session.get("title"),
+                    message_count=session["message_count"],
+                    created_at=created_at,
+                    last_activity=last_activity,
+                    domains=session.get("domains_used", [])
+                ))
+            
+            web_logger.info(f"Returning {len(sessions)} anonymous sessions")
+            return sessions
+            
     except Exception as e:
         web_logger.error(f"Session listing error: {e}")
         raise HTTPException(status_code=500, detail="Error listing sessions")
 
 @app.get("/sessions/{session_id}/history", response_model=SessionHistoryResponse)
-async def get_session_history(session_id: str):
-    """Get chat history for a specific session using UnifiedSessionManager"""
+async def get_session_history(session_id: str, user: OptionalUser = None):
+    """Get chat history for a specific session with access control"""
     try:
         _, session_manager = get_graph_and_session_manager()
-        session_info = session_manager.load_session(session_id)
+        
+        # Determine the actual session ID to load
+        actual_session_id = session_id
+        
+        # If user is authenticated, check if this is a user session
+        if user:
+            # If session_id doesn't have user prefix, add it
+            user_prefix = f"user_{user.sub.replace('|', '_')}_"
+            if not session_id.startswith(user_prefix):
+                actual_session_id = f"{user_prefix}{session_id}"
+            
+            # Try to load user-specific session first
+            session_info = session_manager.load_session(actual_session_id)
+            if not session_info:
+                # Try loading without prefix (for backward compatibility)
+                session_info = session_manager.load_session(session_id)
+                if session_info:
+                    # Check if this session belongs to this user or is anonymous
+                    if session_id.startswith("user_") and not session_id.startswith(user_prefix):
+                        # This session belongs to another user
+                        raise HTTPException(status_code=403, detail="Access denied: Session belongs to another user")
+        else:
+            # Anonymous user - can only access anonymous sessions
+            if session_id.startswith("user_"):
+                raise HTTPException(status_code=403, detail="Access denied: Authentication required for user sessions")
+            
+            session_info = session_manager.load_session(session_id)
         
         if not session_info:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -583,6 +642,7 @@ async def get_session_history(session_id: str):
                     timestamp=datetime.now()  # Note: we don't store timestamps in current system
                 ))
         
+        web_logger.info(f"Retrieved {len(history)} messages for session {session_id[:8]}... (user: {'authenticated' if user else 'anonymous'})")
         return SessionHistoryResponse(session_id=session_id, messages=history)
     except HTTPException:
         raise
@@ -685,15 +745,39 @@ async def unarchive_session(session_id: str):
         raise HTTPException(status_code=500, detail="Error restoring session")
 
 @app.delete("/sessions/{session_id}", response_model=SuccessResponse, status_code=status.HTTP_200_OK)
-async def delete_session(session_id: str):
-    """Delete a session permanently"""
+async def delete_session(session_id: str, user: OptionalUser = None):
+    """Delete a session permanently with access control"""
     try:
         _, session_manager = get_graph_and_session_manager()
         
+        # Determine the actual session ID to delete
+        actual_session_id = session_id
+        
+        # Access control
+        if user:
+            # Authenticated user - ensure they own the session
+            user_prefix = f"user_{user.sub.replace('|', '_')}_"
+            if not session_id.startswith(user_prefix):
+                actual_session_id = f"{user_prefix}{session_id}"
+            
+            # Verify session exists and belongs to user
+            session_info = session_manager.load_session(actual_session_id)
+            if not session_info:
+                # Try without prefix for backward compatibility
+                session_info = session_manager.load_session(session_id)
+                if session_info and session_id.startswith("user_") and not session_id.startswith(user_prefix):
+                    raise HTTPException(status_code=403, detail="Access denied: Cannot delete another user's session")
+                actual_session_id = session_id
+        else:
+            # Anonymous user - can only delete anonymous sessions
+            if session_id.startswith("user_"):
+                raise HTTPException(status_code=403, detail="Access denied: Authentication required to delete user sessions")
+        
         # Delete session from the database
-        success = session_manager.delete_session(session_id)
+        success = session_manager.delete_session(actual_session_id)
         
         if success:
+            web_logger.info(f"Session {session_id[:8]}... deleted by {'authenticated user' if user else 'anonymous user'}")
             return SuccessResponse(success=True, message="Session deleted")
         else:
             raise HTTPException(status_code=404, detail="Session not found")
