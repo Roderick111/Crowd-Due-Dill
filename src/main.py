@@ -134,38 +134,13 @@ def router(state: State):
     return {"next": "advisory" if message_type == "advisory" else "analytical"}
 
 def get_rag_context(user_message: str, should_use_rag: bool) -> dict:
-    """Get RAG context with Q&A cache optimization and clean logging."""
+    """Get RAG context with simplified flow (Q&A cache disabled)."""
     try:
         if not should_use_rag:
             return {"type": "no_rag", "content": ""}
         
-        # Check for negative intent - if detected, skip cache and force RAG
+        # Check for negative intent - if detected, log it
         force_rag = negative_detector.has_negative_intent(user_message)
-        
-        # Get active domains for filtering
-        active_domains = rag_system.get_domain_status().get("active_domains", [])
-        
-        # Step 1: Q&A Cache Search (unless negative intent detected)
-        if not force_rag:
-            qa_result = qa_cache.search_qa(user_message, active_domains, k=3)
-            if qa_result:
-                logger.qa_cache_hit(qa_result['similarity'], user_message[:50])
-                return {
-                    "type": "qa_cache_hit",
-                    "content": qa_result['answer'],
-                    "metadata": {
-                        "question": qa_result['question'],
-                        "domain": qa_result['domain'],
-                        "source": qa_result['source'],
-                        "similarity": qa_result['similarity'],
-                        "qa_id": qa_result['qa_id'],
-                        "response_time": qa_result['response_time']
-                    }
-                }
-        
-        # Step 2: Regular RAG Search (if Q&A cache missed or negative intent)
-        return_type = "negative_intent_bypass" if force_rag else "rag_context"
-        
         if force_rag:
             logger.negative_intent(user_message[:50])
         
@@ -178,7 +153,7 @@ def get_rag_context(user_message: str, should_use_rag: bool) -> dict:
                 f"[Chunk {chunk['chunk_id']}]: {chunk['content']}"
                 for chunk in rag_result["chunks"]
             ])
-            return {"type": return_type, "content": chunks_text}
+            return {"type": "rag_context", "content": chunks_text}
         
         # Check if domain was blocked
         query_type = rag_result.get("metadata", {}).get("query_type", "")
@@ -326,10 +301,7 @@ You naturally know this current regulatory context. When asked about current dat
     # Handle different types of RAG responses
     if rag_type == "domain_blocked":
         return {"messages": [AIMessage(content=rag_context)], "rag_context": "domain_blocked"}
-    elif rag_type == "qa_cache_hit":
-        # Direct Q&A cache hit - return the answer directly
-        return {"messages": [AIMessage(content=rag_context)], "rag_context": "qa_cache_hit"}
-    elif rag_context:
+    elif rag_type == "rag_context":
         context_verb = "strategic guidance" if agent_type == "advisory" else "technical analysis"
         system_content += f"\n\nUse this knowledge to inform your {context_verb}:{rag_context}. Never reference chunk numbers or sources, speak as if the knowledge flows directly from your own understanding. You should use it as inspiration, not as a direct quote."
     
@@ -387,11 +359,10 @@ session_manager = UnifiedSessionManager(checkpointer, graph)
 def print_stats():
     """Print comprehensive system statistics."""
     try:
-        # Use the enhanced stats collector
+        # Use the enhanced stats collector (qa_cache disabled)
         rag_system.stats_collector.print_comprehensive_stats(
             vectorstore=rag_system.vectorstore,
             domain_manager=domain_manager,
-            qa_cache=qa_cache,
             memory_manager=memory_manager
         )
             
@@ -401,7 +372,6 @@ def print_stats():
 # Register dependencies with command handler (after all functions are defined)
 command_handler.register_dependencies(
     rag_system=rag_system,
-    qa_cache=qa_cache,
     memory_manager=memory_manager,
     session_manager=session_manager,
     print_stats=print_stats,
@@ -527,11 +497,7 @@ def run_chatbot():
                 
                 # Response type indicators
                 cache_indicator = ""
-                if rag_context == "qa_cache_hit":
-                    cache_indicator = "⚡ "  # Q&A cache hit
-                elif rag_context == "negative_intent_bypass":
-                    cache_indicator = "🛡️ "  # Negative intent bypassed cache
-                elif rag_context == "domain_blocked":
+                if rag_context == "domain_blocked":
                     cache_indicator = "🚫 "  # Domain blocked
                 elif rag_context:
                     cache_indicator = "🔍 "  # RAG used

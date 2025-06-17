@@ -523,7 +523,7 @@ async def get_system_status():
             active_domains=system_status["active_domains"],
             available_domains=system_status["available_domains"],
             total_documents=system_status["total_documents"],
-            cache_size=qa_cache.get_cache_stats()["total_pairs"],
+            cache_size=0,  # Q&A cache disabled
             memory_enabled=memory_settings
         )
     except Exception as e:
