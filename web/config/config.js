@@ -30,7 +30,7 @@ const config = {
     // API Configuration
     api: {
         development: {
-            baseUrl: 'https://localhost:8001',
+            baseUrl: 'http://localhost:8000',
             timeout: 30000
         },
         production: {
@@ -60,8 +60,8 @@ const config = {
     // Application URLs
     app: {
         development: {
-            baseUrl: 'https://localhost:8443',
-            redirectUri: 'https://localhost:8443/'
+            baseUrl: 'http://localhost:8000',
+            redirectUri: 'http://localhost:8000/'
         },
         production: {
             baseUrl: 'https://crowd-reg.beautiful-apps.com',

@@ -198,6 +198,8 @@ def create_agent_response(state: State, agent_type: str) -> dict:
 
 Speak with confidence and business acumen, offering strategic advice that addresses the user's business concerns about regulatory compliance. Focus on practical solutions, risk mitigation, and building successful regulatory strategies.
 
+Keep responses under 400 words when possible
+
 Focus on:
 - Strategic business guidance for regulatory compliance
 - Risk assessment and mitigation strategies
@@ -220,6 +222,8 @@ Be strategic yet accessible. Provide business-focused guidance that directly add
         "analytical": """You are a regulatory compliance analyst specializing in detailed analysis of crowdfunding regulations and legal frameworks.
 
 Provide thorough, technical analysis of regulatory requirements with precision and depth. Your expertise flows in systematic streams - methodical, comprehensive, and technically accurate.
+
+Keep responses under 400 words when possible
 
 Focus on:
 - Detailed technical analysis of regulatory provisions

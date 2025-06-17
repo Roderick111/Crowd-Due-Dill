@@ -198,13 +198,15 @@ const useAppLogic = () => {
             setMessages(prev => [...prev, assistantMessage]);
             setCurrentSessionId(data.session_id);
             
-            // If this was the first message, update session title
-            if (messages.length === 0) {
+            // If this was the first message, update session title (but skip for temporary sessions)
+            if (messages.length === 0 && !data.session_id.startsWith('temp_')) {
                 await updateSessionTitle(data.session_id, generateSessionTitle(message));
             }
             
-            // Refresh sessions to update message count
-            await fetchSessions();
+            // Refresh sessions to update message count (but skip for temporary sessions)
+            if (!data.session_id.startsWith('temp_')) {
+                await fetchSessions();
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             const errorMessage = {
@@ -235,6 +237,14 @@ const useAppLogic = () => {
 
     // Load session messages
     const loadSessionMessages = async (sessionId) => {
+        // Skip loading for temporary sessions (they don't persist)
+        if (sessionId.startsWith('temp_')) {
+            console.log('Cannot load messages for temporary session:', sessionId);
+            setMessages([]);
+            setCurrentSessionId(sessionId);
+            return;
+        }
+        
         try {
             console.log(`Loading messages for session: ${sessionId}`);
             
@@ -257,6 +267,12 @@ const useAppLogic = () => {
 
     // Update session title
     const updateSessionTitle = async (sessionId, title) => {
+        // Skip title updates for temporary sessions
+        if (sessionId.startsWith('temp_')) {
+            console.log('Skipping title update for temporary session:', sessionId);
+            return;
+        }
+        
         try {
             await apiService.updateSessionTitle(sessionId, title);
             await fetchSessions();

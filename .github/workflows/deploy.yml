@@ -20,9 +20,8 @@ jobs:
         username: ${{ secrets.USERNAME }}
         key: ${{ secrets.SSH_KEY }}
         script: |
-          cd /opt/crowd-due-dill
+          cd /root/Crowd-Due-Dill/
           git pull origin main
-          docker compose -f docker-compose.production.yml down
           docker compose -f docker-compose.production.yml build --no-cache
           docker compose -f docker-compose.production.yml up -d
           
@@ -30,7 +29,7 @@ jobs:
           sleep 30
           
           # Health check
-          if curl -f https://${{ secrets.DOMAIN_NAME }}/health; then
+          if curl -f https://crowd-reg.beautiful-apps.com/health; then
             echo "✅ Deployment successful"
           else
             echo "❌ Deployment failed"

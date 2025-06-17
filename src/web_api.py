@@ -52,6 +52,9 @@ from src.utils.logger import logger
 logging.basicConfig(level=logging.INFO)
 web_logger = logging.getLogger("crowdfunding_web_api")
 
+# In-memory store for temporary sessions (anonymous users)
+temporary_sessions = {}
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Crowdfunding Due Diligence API",
@@ -248,7 +251,39 @@ def get_or_create_session(session_id: Optional[str] = None, user: Optional[Auth0
     _, session_manager = get_graph_and_session_manager()
     
     if session_id:
-        # Try to load existing session
+        # Special handling for temporary sessions
+        if session_id.startswith("temp_"):
+            # Check if we have this temporary session in memory
+            if session_id in temporary_sessions:
+                temp_session = temporary_sessions[session_id]
+                temp_session["session_metadata"]["last_activity"] = datetime.now().isoformat()
+                return session_id, {
+                    "state": temp_session,
+                    "config": {"configurable": {"thread_id": session_id}},
+                    "created_at": temp_session["session_metadata"]["created_at"],
+                    "last_activity": temp_session["session_metadata"]["last_activity"],
+                    "message_count": len(temp_session.get("messages", []))
+                }
+            else:
+                # Create new temporary session and store it
+                temp_state = {
+                    "messages": [],
+                    "session_metadata": {
+                        "created_at": datetime.now().isoformat(),
+                        "last_activity": datetime.now().isoformat(),
+                        "temporary": True
+                    }
+                }
+                temporary_sessions[session_id] = temp_state
+                return session_id, {
+                    "state": temp_state,
+                    "config": {"configurable": {"thread_id": session_id}},
+                    "created_at": temp_state["session_metadata"]["created_at"],
+                    "last_activity": temp_state["session_metadata"]["last_activity"],
+                    "message_count": 0
+                }
+        
+        # Try to load existing session (for persistent sessions)
         session_info = session_manager.load_session(session_id)
         if session_info:
             session_manager.current_thread_id = session_id
@@ -526,8 +561,21 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
             agent_type = "advisory" if simple_state.get("message_type") == "advisory" else "analytical"
             response = create_agent_response(simple_state, agent_type)
             
-            # Update the temporary state
-            current_state.update(response)
+            # Update the temporary state, but preserve conversation history
+            # The create_agent_response returns {"messages": [AIMessage(...)], ...}
+            # We need to add the AI message to existing messages, not replace them
+            if "messages" in response:
+                # Add the AI response to the existing conversation
+                current_state["messages"].extend(response["messages"])
+                # Update other fields from response
+                for key, value in response.items():
+                    if key != "messages":
+                        current_state[key] = value
+            else:
+                current_state.update(response)
+            
+            # Save the updated temporary session state back to memory store
+            temporary_sessions[session_id] = current_state
         else:
             # For persistent sessions, use full graph processing with database
             graph, _ = get_graph_and_session_manager()
@@ -663,7 +711,15 @@ async def get_session_history(session_id: str, user: OptionalUser = None):
             if session_id.startswith("user_"):
                 raise HTTPException(status_code=403, detail="Access denied: Authentication required for user sessions")
             
-            session_info = session_manager.load_session(session_id)
+            # Check for temporary sessions first
+            if session_id.startswith("temp_"):
+                if session_id not in temporary_sessions:
+                    raise HTTPException(status_code=404, detail="Temporary session not found or expired")
+                session_info = {
+                    "state": temporary_sessions[session_id]
+                }
+            else:
+                session_info = session_manager.load_session(session_id)
         
         if not session_info:
             raise HTTPException(status_code=404, detail="Session not found")
