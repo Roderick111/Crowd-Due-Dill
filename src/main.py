@@ -44,8 +44,8 @@ load_dotenv()
 llm = init_chat_model("gemini-2.0-flash-001", model_provider="google_genai")
 
 # Initialize system components
-# Using 'eu_crowdfunding' domain for crowdfunding due diligence
-domain_manager = DomainManager(initial_domains={'eu_crowdfunding'})
+# Using simplified domain manager (always eu_crowdfunding)
+domain_manager = DomainManager()
 negative_detector = NegativeIntentDetector()
 qa_cache = QACache()
 rag_system = OptimizedContextualRAGSystem(domain_manager=domain_manager)
