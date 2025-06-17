@@ -82,9 +82,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for web interface
-if os.path.exists("web"):
-    app.mount("/web", StaticFiles(directory="web", html=True), name="web")
+# Static files will be mounted after all routes are defined
 
 # ==================== PYDANTIC MODELS ====================
 
@@ -340,21 +338,7 @@ def update_session_activity(session_id: str):
     active_domains = rag_system.get_domain_status().get("active_domains", [])
     session_manager.update_activity(active_domains)
 
-@app.get("/")
-async def root():
-    """Root endpoint - serve web interface"""
-    # Serve the main web interface
-    try:
-        return FileResponse("web/index.html")
-    except Exception as e:
-        web_logger.error(f"Error serving web interface: {e}")
-        # Fallback to API information if web interface fails
-        return {
-            "message": "Crowdfunding Due Diligence API",
-            "version": "2.0.0",
-            "status": "active",
-            "web_interface": "/web/index.html"
-        }
+# Root route is now handled by the catch-all static file handler at the end
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -1250,6 +1234,38 @@ async def cancel_user_subscription(user: RequiredUser, request: CancelSubscripti
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to cancel subscription"
         )
+
+# ==================== STATIC FILE MOUNTING ====================
+# Mount static files after all routes are defined to avoid conflicts
+if os.path.exists("web"):
+    # Mount subdirectories first
+    for subdir in ["components", "hooks", "services", "config"]:
+        subdir_path = f"web/{subdir}"
+        if os.path.exists(subdir_path):
+            app.mount(f"/{subdir}", StaticFiles(directory=subdir_path), name=f"static_{subdir}")
+    
+    # Handle root route explicitly
+    @app.get("/")
+    async def serve_root():
+        """Serve the main web interface"""
+        return FileResponse("web/index.html")
+    
+    # Mount root web files (CSS, JS, etc.) but exclude API paths
+    # This catch-all mount should be last
+    @app.get("/{file_path:path}")
+    async def serve_static_files(file_path: str):
+        """Serve static files from web directory, but only for non-API paths"""
+        # Skip API paths to avoid conflicts
+        if file_path.startswith(('api', 'auth', 'chat', 'health', 'status', 'sessions', 'domains', 'stripe', 'admin', 'command', 'favicon.ico', 'apple-touch-icon', 'robots.txt', 'manifest.json')):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Serve files from web directory
+        file_full_path = os.path.join("web", file_path)
+        if os.path.exists(file_full_path) and os.path.isfile(file_full_path):
+            return FileResponse(file_full_path)
+        
+        # File not found
+        raise HTTPException(status_code=404, detail="File not found")
 
 if __name__ == "__main__":
     print("⚖️ Starting Crowdfunding Due Diligence AI Agent Web API...")
