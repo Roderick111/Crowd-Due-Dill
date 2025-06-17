@@ -221,7 +221,7 @@ class OptimizedContextualRAGSystem:
         domain_filter = None
         
         if self.domain_manager:
-            domain_status = self.domain_manager.get_status()
+            domain_status = self.domain_manager.get_domain_status()
             active_domains = domain_status.get("active_domains", [])
             
             if active_domains:
@@ -397,7 +397,7 @@ class OptimizedContextualRAGSystem:
         
         # Add domain status
         if self.domain_manager:
-            stats['domain_config'] = self.domain_manager.get_status()
+            stats['domain_config'] = self.domain_manager.get_domain_status()
         else:
             stats['domain_config'] = {'status': 'disabled'}
         
@@ -406,16 +406,22 @@ class OptimizedContextualRAGSystem:
     def get_domain_status(self) -> Dict[str, Any]:
         """Get domain manager status."""
         if self.domain_manager:
-            return self.domain_manager.get_status()
+            return self.domain_manager.get_domain_status()
         return {"active_domains": [], "available_domains": []}
     
     def enable_domain(self, domain: str) -> bool:
         """Enable a domain."""
-        return self.domain_manager.enable_domain(domain) if self.domain_manager else False
+        if self.domain_manager:
+            result = self.domain_manager.activate_domains([domain])
+            return len(result.get("activated", [])) > 0
+        return False
     
     def disable_domain(self, domain: str) -> bool:
         """Disable a domain."""
-        return self.domain_manager.disable_domain(domain) if self.domain_manager else False
+        if self.domain_manager:
+            result = self.domain_manager.deactivate_domains([domain])
+            return len(result.get("deactivated", [])) > 0
+        return False
     
     def get_collection_info(self) -> Dict[str, Any]:
         """Get collection information."""

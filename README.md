@@ -33,10 +33,10 @@ A sophisticated AI-powered legal compliance assistant specializing in crowdfundi
 - **Due Diligence**: Platform requirements, project owner verification, ongoing compliance
 
 ### 🛡️ **Safety & Intelligence**
-- **Semantic Domain Detection**: Suggests relevant regulatory domain activation
 - **Context-Aware Responses**: Maintains legal consultation continuity
 - **Performance Analytics**: Comprehensive statistics and monitoring
 - **Clean Command System**: Organized command handling with registry pattern
+- **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy
 
 ## 📁 Project Structure
 
@@ -46,7 +46,7 @@ crowd-due-dill/
 │   ├── main.py                       # Multi-agent system with LangGraph & session management
 │   ├── core/                         # Core system components
 │   │   ├── contextual_rag.py         # Main RAG system with domain filtering
-│   │   ├── domain_manager.py         # Regulatory domain activation/deactivation
+│   │   ├── domain_manager.py         # Simplified single-domain manager (eu_crowdfunding)
 │   │   ├── unified_session_manager.py # Session & memory persistence ⭐ NEW!
 │   │   ├── resilience_manager.py     # System reliability and error recovery
 │   │   ├── stats_collector.py        # Performance monitoring
@@ -185,14 +185,11 @@ memory disable medium           # Disable medium-term memory
 
 #### **Domain Management** 🎯
 ```bash
-# Domain operations
-domains                         # Show active/available domains
-domains enable <domain>         # Activate regulatory domain
-domains disable <domain>        # Deactivate regulatory domain
+# Domain information
+domains                         # Show current domain status (always eu_crowdfunding)
 
-# Examples:
-domains enable eu_crowdfunding  # Activate EU crowdfunding regulations
-domains disable securities_law  # Deactivate securities law domain
+# Note: Domain switching is disabled in single-domain mode
+# The system is optimized for EU crowdfunding regulations only
 ```
 
 #### **System Operations** ⚙️
@@ -324,7 +321,7 @@ State = {
 - **`main.py`**: LangGraph-based multi-agent orchestration with session management
 - **`contextual_rag.py`**: Domain-aware RAG with ChromaDB integration
 - **`qa_cache.py`**: Specialized Q&A caching for regulatory questions
-- **`domain_manager.py`**: Dynamic regulatory domain activation/deactivation
+- **`domain_manager.py`**: Simplified single-domain manager for EU crowdfunding regulations
 
 ### Intelligence & Safety Layers
 - **`negative_intent_detector.py`**: Prevents cache poisoning attacks
@@ -547,3 +544,18 @@ This system is designed to assist with regulatory compliance research and analys
 ---
 
 *Built with LangChain, ChromaDB, LangGraph, OpenAI, Google Gemini, Auth0, Stripe, and SQLite - Bridging regulatory expertise with modern AI for intelligent legal compliance assistance.* 
+
+## 🎯 **Focus Areas**
+
+**Primary Domain: EU Crowdfunding Regulation**
+- **EU Crowdfunding Regulation 2020/1503**: Complete regulatory framework coverage
+- **Authorization Requirements**: Licensing, competent authorities, operational conditions
+- **Platform Obligations**: Due diligence, disclosure requirements, risk management
+- **Investor Protection**: Information disclosure, risk warnings, investment limits
+- **Cross-Border Services**: Passporting rights, regulatory harmonization, ESMA guidelines
+
+### 🛡️ **Safety & Intelligence**
+- **Context-Aware Responses**: Maintains legal consultation continuity
+- **Performance Analytics**: Comprehensive statistics and monitoring
+- **Clean Command System**: Organized command handling with registry pattern
+- **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy 

@@ -209,19 +209,13 @@ class CommandHandler:
     # ===================
     
     def _handle_domain_enable(self, domain: str) -> bool:
-        """Enable a specific domain."""
-        if self.rag_system.enable_domain(domain):
-            logger.command_executed(f"Domain '{domain}' enabled")
-        else:
-            logger.error(f"Failed to enable domain '{domain}'")
+        """Domain switching disabled - only eu_crowdfunding is supported."""
+        logger.command_executed(f"Domain switching disabled - eu_crowdfunding is always active")
         return True
     
     def _handle_domain_disable(self, domain: str) -> bool:
-        """Disable a specific domain."""
-        if self.rag_system.disable_domain(domain):
-            logger.command_executed(f"Domain '{domain}' disabled")
-        else:
-            logger.error(f"Failed to disable domain '{domain}'")
+        """Domain switching disabled - only eu_crowdfunding is supported."""
+        logger.command_executed(f"Domain switching disabled - eu_crowdfunding cannot be disabled")
         return True
     
     def _handle_memory_enable(self, memory_type: str, state: dict) -> bool:

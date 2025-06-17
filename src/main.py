@@ -53,15 +53,6 @@ rag_system = OptimizedContextualRAGSystem(domain_manager=domain_manager)
 # Initialize memory manager with stats collector
 memory_manager = MemoryManager(llm, rag_system.stats_collector)
 
-# Simple semantic detector stub (feature disabled for now)
-class SimpleSemanticDetectorStub:
-    def is_available(self):
-        return False
-    def get_domain_suggestions(self, message, active_domains):
-        return {"needs_activation": False}
-
-semantic_detector = SimpleSemanticDetectorStub()
-
 # Session manager will be initialized after graph compilation
 
 class CombinedDecision(BaseModel):
@@ -253,25 +244,6 @@ Be precise and thorough. Structure your analysis with clear technical headings t
     system_content = system_prompts[agent_type]
     active_domains = rag_system.get_domain_status()["active_domains"]
     system_content += build_domain_guidance(active_domains, agent_type)
-    
-    # Check for domain activation suggestions EARLY in context
-    if semantic_detector.is_available():
-        try:
-            suggestion_result = semantic_detector.get_domain_suggestions(last_message.content, active_domains)
-            if suggestion_result["needs_activation"]:
-                detected_domain = suggestion_result["detected_domain"]
-                domain_display_names = {
-                    "eu_crowdfunding": "EU Crowdfunding Regulations",
-                    "securities_law": "Securities Law",
-                    "compliance": "Regulatory Compliance",
-                    "best_practices": "Industry Best Practices"
-                }
-                domain_display_name = domain_display_names.get(detected_domain, detected_domain.title())
-                
-                # Add suggestion to system content for context
-                system_content += f"\n\nIMPORTANT: The user's question relates to {domain_display_name} domain which is currently inactive. Explicitly tell about your limitations in the intro. Provide a helpful relevant response with available knowledge. Mention at the end that the domain can be enabled in settings."
-        except Exception as e:
-            logger.debug(f"Domain suggestion error: {e}")
     
     # Add current regulatory context
     try:
