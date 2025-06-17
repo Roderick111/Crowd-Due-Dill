@@ -31,9 +31,9 @@ jobs:
           echo "📋 Git status before pull:"
           git status --porcelain
           
-          # Pull latest changes (using HTTPS to avoid SSH key issues)
+          # Pull latest changes (ensure SSH remote is set)
           echo "📥 Pulling latest changes..."
-          git remote set-url origin https://github.com/Roderick111/Crowd-Due-Dill.git
+          git remote set-url origin git@github.com:Roderick111/Crowd-Due-Dill.git
           git pull origin main
           
           # Check if pull was successful
