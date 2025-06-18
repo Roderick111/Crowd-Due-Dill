@@ -34,22 +34,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Download dependencies as a separate step to take advantage of Docker's caching
-# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds
-# Leverage a bind mount to requirements.txt to avoid having to copy them into this layer
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    python -m pip install --no-cache-dir -r requirements.txt
+# Upgrade pip to latest version to fix warning
+RUN python -m pip install --upgrade pip
 
 # Create necessary directories with proper permissions
-RUN mkdir -p /app/data /app/logs /app/ssl && \
+RUN mkdir -p /app/data /app/logs /app/ssl /app/.cache && \
     chown -R appuser:appuser /app
+
+# Switch to the non-privileged user before installing Python packages
+USER appuser
+
+# Set pip cache directory for the appuser
+ENV PIP_CACHE_DIR=/app/.cache/pip
+
+# Copy requirements file
+COPY --chown=appuser:appuser requirements.txt .
+
+# Download dependencies as a separate step to take advantage of Docker's caching
+# Install packages as appuser to avoid permission warnings
+RUN python -m pip install --user --no-cache-dir -r requirements.txt
+
+# Add user-installed packages to PATH
+ENV PATH="/app/.local/bin:${PATH}"
 
 # Copy the source code into the container
 COPY --chown=appuser:appuser . .
-
-# Switch to the non-privileged user to run the application
-USER appuser
 
 # Expose the port that the application listens on
 EXPOSE 8001

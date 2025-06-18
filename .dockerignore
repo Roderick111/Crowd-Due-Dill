@@ -1,130 +1,95 @@
-# Include any files or directories that you don't want to be copied to your
-# container here (e.g., local build artifacts, temporary files, etc.).
-#
-# For more help, visit the .dockerignore file reference guide at
-# https://docs.docker.com/go/build-context-dockerignore/
+# Docker ignore file for Crowd Due Dill
+# Excludes unnecessary files from Docker build context
 
-# Git
-**/.git
-**/.gitignore
+# Git files
+.git
+.gitignore
+.gitattributes
 
-# Docker files
-**/Dockerfile*
-**/docker-compose*
-**/compose.y*ml
-**/.dockerignore
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
 
-# Development files
-**/.DS_Store
-**/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
-**/.Python
-**/env
-**/venv
-**/.venv
-**/ENV
-**/env.bak
-**/venv.bak
-**/.pytest_cache
-**/.coverage
-**/htmlcov
-**/.tox
-**/.cache
-**/.mypy_cache
-**/.dmypy.json
-**/dmypy.json
+# Development and testing
+.pytest_cache/
+.coverage
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
-# IDE files
-**/.vscode
-**/.idea
-**/.project
-**/.classpath
-**/.settings
-**/*.swp
-**/*.swo
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
 *~
+.DS_Store
 
-# OS files
-**/.DS_Store
-**/Thumbs.db
-**/ehthumbs.db
-**/Desktop.ini
+# Local environment files
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
 
-# Logs
-**/logs
-**/*.log
-**/npm-debug.log*
-**/yarn-debug.log*
-**/yarn-error.log*
+# Documentation and development files
+README.md
+docs/
+*.md
+LICENSE
 
-# Runtime data
-**/pids
-**/*.pid
-**/*.seed
-**/*.pid.lock
-
-# Build artifacts
-**/build
-**/dist
-**/*.egg-info
-**/.eggs
-**/target
-**/bin
-**/obj
-
-# Environment files (keep .env.example)
-**/.env
-**/.env.local
-**/.env.*.local
-**/.env.backup
-
-# SSL certificates (will be mounted as volumes)
-**/ssl/*.pem
-**/ssl/*.key
-**/ssl/*.crt
-
-# Data directories (will be mounted as volumes)
-**/data/chroma_db
-**/data/sessions
-**/data/qa
+# Archive and backup files
+*.tar.gz
+*.zip
+*.bak
+crowd-due-dill-data.tar.gz
 
 # Test files
-**/tests
-**/test_*
-**/*_test.py
-**/pytest.ini
-**/tox.ini
+tests/
+test_*
 
-# Documentation
-**/README.md
-**/LICENSE
-**/docs
-**/*.md
+# Logs
+logs/
+*.log
 
 # Temporary files
-**/tmp
-**/temp
-**/.tmp
+tmp/
+temp/
+.tmp/
 
-# Node.js (if any)
-**/node_modules
-**/npm-debug.log
-**/yarn.lock
-**/package-lock.json
+# Node modules (if any)
+node_modules/
 
-# Python specific
-**/.python-version
-**/Pipfile
-**/Pipfile.lock
-**/poetry.lock
-**/pyproject.toml
+# Docker files (not needed in container)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
 
-# Jupyter notebooks
-**/*.ipynb
-**/.ipynb_checkpoints
+# Scripts that are for local development
+scripts/
+key
 
-# Local development tools
-**/tools/debug_*
-**/tools/test_* 
+# Archive directory
+archive/
+
+# SSL certificates (should be managed by containers)
+ssl/
+
+# Monitoring configuration (separate container)
+monitoring/prometheus/
+monitoring/grafana/
+
+# Local data (persisted via volumes)
+data/ 
