@@ -2,8 +2,6 @@
 # Grafana + Prometheus with integrated email alerts
 # Uses nginx-proxy for SSL and domain routing
 
-version: '3.8'
-
 services:
   # Prometheus - Metrics Collection and Storage
   prometheus:
@@ -164,7 +162,7 @@ volumes:
 networks:
   monitoring:
     name: crowd_due_dill_monitoring
-    driver: bridge
+    external: true
   proxy:
     name: proxy
     external: true 
