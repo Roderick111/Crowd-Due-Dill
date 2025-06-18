@@ -333,14 +333,29 @@ graph = graph_builder.compile(checkpointer=checkpointer)
 session_manager = UnifiedSessionManager(checkpointer, graph)
 
 def print_stats():
-    """Print comprehensive system statistics."""
+    """Print internal application statistics to console.
+    
+    Note: For production metrics and monitoring, visit:
+    - Prometheus metrics: https://crowd-reg.beautiful-apps.com/metrics
+    - Grafana dashboards: https://monitoring.crowd-reg.beautiful-apps.com
+    """
     try:
-        # Use the enhanced stats collector (qa_cache disabled)
+        print("\n" + "="*60)
+        print("🔧 INTERNAL APPLICATION STATISTICS")
+        print("📊 For production monitoring, use Grafana dashboards")
+        print("="*60)
+        
+        # Use the enhanced stats collector for internal metrics
         rag_system.stats_collector.print_comprehensive_stats(
             vectorstore=rag_system.vectorstore,
             domain_manager=domain_manager,
             memory_manager=memory_manager
         )
+        
+        print("\n💡 Production Monitoring:")
+        print("   📈 Metrics: https://crowd-reg.beautiful-apps.com/metrics")
+        print("   📊 Dashboards: https://monitoring.crowd-reg.beautiful-apps.com")
+        print("="*60)
             
     except Exception as e:
         logger.error(f"Stats error: {e}")

@@ -58,6 +58,10 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8001
       
+      # Monitoring settings
+      - ENABLE_METRICS=true
+      - METRICS_PORT=8001
+      
       # Automatic SSL/Proxy Configuration
       - VIRTUAL_HOST=${DOMAIN_NAME}
       - VIRTUAL_PORT=8001
@@ -108,6 +112,7 @@ services:
     networks:
       - default
       - proxy
+      - monitoring  # Add connection to monitoring network
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -152,4 +157,7 @@ networks:
     name: crowd_due_dill_network
   proxy:
     name: proxy
+    external: true
+  monitoring:
+    name: crowd_due_dill_monitoring
     external: true 

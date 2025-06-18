@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 """
-Stats Collector for Crowd Due Dill
+Internal Stats Collector for Crowd Due Dill
 
-Clean statistics collection with:
-- Query performance tracking
-- Vectorstore health monitoring
-- Resilience metrics integration
-- Memory system monitoring
-- Clean logging
+This provides application-specific statistics that complement Prometheus metrics:
+
+- **Memory system performance** (summaries, context builds)
+- **Vectorstore health monitoring** (document counts, collection status)  
+- **Domain manager statistics** (active domains, toggles)
+- **Development debugging** (immediate console output)
+
+For production HTTP/system metrics, see Prometheus integration in web_api.py.
+For production monitoring dashboards, see Grafana at monitoring.domain.com.
+
+Usage:
+- Internal application logic and health checks
+- Development debugging and console output
+- Application-specific business metrics
+- Memory and AI system performance tracking
 """
 
 import time
@@ -20,14 +29,16 @@ from src.utils.logger import logger
 
 class StatsCollector:
     """
-    Clean statistics collector for system performance monitoring.
+    Internal statistics collector for AI application performance monitoring.
     
-    Tracks:
-    - Query performance and response times
+    Complements Prometheus metrics by tracking:
+    - Memory system performance (summaries, context builds)
     - Vectorstore health and document counts
-    - System resilience metrics
-    - Cache hit rates and efficiency
-    - Memory system performance
+    - Domain manager configuration tracking
+    - Application-specific business metrics
+    
+    Note: For HTTP request metrics and system monitoring, use Prometheus
+    via the /metrics endpoint and Grafana dashboards.
     """
     
     def __init__(self, max_recent_queries: int = 100):

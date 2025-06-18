@@ -48,6 +48,9 @@ from src.core import (
 )
 from src.utils.logger import logger
 
+# Import monitoring system
+from monitoring import setup_monitoring
+
 # Configure logging for web API
 logging.basicConfig(level=logging.INFO)
 web_logger = logging.getLogger("crowdfunding_web_api")
@@ -63,6 +66,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Set up monitoring (Prometheus metrics)
+monitoring = setup_monitoring(app)
 
 # Configure CORS for web frontend access
 origins = [
@@ -481,6 +487,18 @@ async def health_check():
         domain_status = rag_system.get_domain_status()
         auth0_status = get_auth0_status()
         
+        # Update component health status
+        monitoring.set_component_healthy("web_api")
+        monitoring.set_component_healthy("rag_system")
+        monitoring.set_component_healthy("domain_manager")
+        monitoring.set_component_healthy("session_manager")
+        
+        # Check Auth0 status
+        if auth0_status == "enabled":
+            monitoring.set_component_healthy("auth0")
+        else:
+            monitoring.set_component_degraded("auth0")
+        
         return {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
@@ -493,131 +511,161 @@ async def health_check():
             }
         }
     except Exception as e:
+        # Mark components as unhealthy
+        monitoring.set_component_unhealthy("web_api")
+        monitoring.track_application_error(
+            error_type="system",
+            component="health_check",
+            error=e,
+            endpoint="/health",
+            function="health_check"
+        )
         web_logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
 @app.post("/chat", response_model=ChatResponse, status_code=status.HTTP_200_OK)
 async def chat(request: ChatRequest, user: OptionalUser = None):
     """Main chat endpoint - POST only (supports optional authentication)"""
-    try:
-        # Handle user-specific session management
-        if user:
-            # Authenticated user - use user-specific session path
-            base_session_id = request.session_id
-            if base_session_id:
-                # Check if session ID is already prefixed to prevent double-prefixing
-                user_prefix = f"user_{user.sub.replace('|', '_')}_"
-                if base_session_id.startswith(user_prefix):
-                    # Already prefixed, use as-is
-                    session_id = base_session_id
+    user_type = "authenticated" if user else "anonymous"
+    
+    # Track performance with monitoring context manager
+    with monitoring.track_request_performance("/chat", user_type):
+        try:
+            # Handle user-specific session management
+            if user:
+                # Authenticated user - use user-specific session path
+                base_session_id = request.session_id
+                if base_session_id:
+                    # Check if session ID is already prefixed to prevent double-prefixing
+                    user_prefix = f"user_{user.sub.replace('|', '_')}_"
+                    if base_session_id.startswith(user_prefix):
+                        # Already prefixed, use as-is
+                        session_id = base_session_id
+                    else:
+                        # Not prefixed, add prefix for isolation
+                        session_id = f"{user_prefix}{base_session_id}"
                 else:
-                    # Not prefixed, add prefix for isolation
-                    session_id = f"{user_prefix}{base_session_id}"
+                    session_id = None
             else:
-                session_id = None
-        else:
-            # Anonymous user - use regular session management
-            session_id = request.session_id
-        
-        # Get or create session (with user migration support)
-        session_id, session_data = get_or_create_session(session_id, user)
-        current_state = session_data["state"]
-        current_config = session_data["config"]
-        
-        # Check if this is a temporary session (anonymous user)
-        is_temporary = session_id.startswith("temp_")
-        
-        # Sync user data if authenticated
-        if user:
-            await user_sync_service.sync_user(user)
-        
-        web_logger.debug(f"Processing message for {'temporary' if is_temporary else 'persistent'} session {session_id[:8]}...")
-        
-        # Add user message to state
-        current_state["messages"].append(HumanMessage(content=request.message))
-        
-        # Import functions needed for both temporary and persistent sessions
-        from src.main import llm, classify_and_decide_rag, create_agent_response
-        
-        if is_temporary:
-            # For temporary sessions, process directly without database persistence
-            # Use a simple direct approach without graph/checkpointer
+                # Anonymous user - use regular session management
+                session_id = request.session_id
             
-            # Create a simple state for processing
-            simple_state = {
-                "messages": current_state["messages"],
-                "session_metadata": current_state.get("session_metadata", {}),
-                "message_type": None,
-                "should_use_rag": None,
-                "rag_context": None,
-                "medium_term_summary": None,
-                "context": {},
-                "memory_settings": {},
-            }
+            # Get or create session (with user migration support)
+            session_id, session_data = get_or_create_session(session_id, user)
+            current_state = session_data["state"]
+            current_config = session_data["config"]
             
-            # Step 1: Classify the message
-            classification = classify_and_decide_rag(simple_state)
-            simple_state.update(classification)
+            # Check if this is a temporary session (anonymous user)
+            is_temporary = session_id.startswith("temp_")
             
-            # Step 2: Create response based on classification
-            agent_type = "advisory" if simple_state.get("message_type") == "advisory" else "analytical"
-            response = create_agent_response(simple_state, agent_type)
+            # Sync user data if authenticated
+            if user:
+                await user_sync_service.sync_user(user)
             
-            # Update the temporary state, but preserve conversation history
-            # The create_agent_response returns {"messages": [AIMessage(...)], ...}
-            # We need to add the AI message to existing messages, not replace them
-            if "messages" in response:
-                # Add the AI response to the existing conversation
-                current_state["messages"].extend(response["messages"])
-                # Update other fields from response
-                for key, value in response.items():
-                    if key != "messages":
-                        current_state[key] = value
+            web_logger.debug(f"Processing message for {'temporary' if is_temporary else 'persistent'} session {session_id[:8]}...")
+            
+            # Add user message to state
+            current_state["messages"].append(HumanMessage(content=request.message))
+            
+            # Import functions needed for both temporary and persistent sessions
+            from src.main import llm, classify_and_decide_rag, create_agent_response
+            
+            if is_temporary:
+                # For temporary sessions, process directly without database persistence
+                # Use a simple direct approach without graph/checkpointer
+                
+                # Create a simple state for processing
+                simple_state = {
+                    "messages": current_state["messages"],
+                    "session_metadata": current_state.get("session_metadata", {}),
+                    "message_type": None,
+                    "should_use_rag": None,
+                    "rag_context": None,
+                    "medium_term_summary": None,
+                    "context": {},
+                    "memory_settings": {},
+                }
+                
+                # Step 1: Classify the message
+                classification = classify_and_decide_rag(simple_state)
+                simple_state.update(classification)
+                
+                # Step 2: Create response based on classification
+                agent_type = "advisory" if simple_state.get("message_type") == "advisory" else "analytical"
+                response = create_agent_response(simple_state, agent_type)
+                
+                # Update the temporary state, but preserve conversation history
+                # The create_agent_response returns {"messages": [AIMessage(...)], ...}
+                # We need to add the AI message to existing messages, not replace them
+                if "messages" in response:
+                    # Add the AI response to the existing conversation
+                    current_state["messages"].extend(response["messages"])
+                    # Update other fields from response
+                    for key, value in response.items():
+                        if key != "messages":
+                            current_state[key] = value
+                else:
+                    current_state.update(response)
+                
+                # Save the updated temporary session state back to memory store
+                temporary_sessions[session_id] = current_state
             else:
-                current_state.update(response)
+                # For persistent sessions, use full graph processing with database
+                graph, _ = get_graph_and_session_manager()
+                result = graph.invoke(current_state, config=current_config)
+                
+                # Update state with result
+                current_state.update(result)
+                
+                # Update session activity for persistent sessions only
+                update_session_activity(session_id)
+                active_domains = rag_system.get_domain_status().get("active_domains", [])
+                _, session_manager = get_graph_and_session_manager()
+                session_manager.update_activity(active_domains)
             
-            # Save the updated temporary session state back to memory store
-            temporary_sessions[session_id] = current_state
-        else:
-            # For persistent sessions, use full graph processing with database
-            graph, _ = get_graph_and_session_manager()
-            result = graph.invoke(current_state, config=current_config)
-            
-            # Update state with result
-            current_state.update(result)
-            
-            # Update session activity for persistent sessions only
-            update_session_activity(session_id)
-            active_domains = rag_system.get_domain_status().get("active_domains", [])
-            _, session_manager = get_graph_and_session_manager()
-            session_manager.update_activity(active_domains)
-        
-        # Extract response information
-        if current_state.get("messages") and len(current_state["messages"]) > 0:
-            last_message = current_state["messages"][-1]
-            
-            # Determine response type and metadata
-            message_type = current_state.get("message_type")
-            rag_context = current_state.get("rag_context")
-            cache_hit = rag_context == "qa_cache_hit"
-            rag_used = bool(rag_context and rag_context != "no_rag")
-            
-            response_content = last_message.content if hasattr(last_message, 'content') else str(last_message)
-            
-            return ChatResponse(
-                response=response_content,
-                session_id=session_id,
-                message_type=message_type,
-                rag_used=rag_used,
-                cache_hit=cache_hit,
-                timestamp=datetime.now()
+            # Extract response information
+            if current_state.get("messages") and len(current_state["messages"]) > 0:
+                last_message = current_state["messages"][-1]
+                
+                # Determine response type and metadata
+                message_type = current_state.get("message_type")
+                rag_context = current_state.get("rag_context")
+                cache_hit = rag_context == "qa_cache_hit"
+                rag_used = bool(rag_context and rag_context != "no_rag")
+                
+                # Track business metrics
+                monitoring.track_chat_message(
+                    user_type=user_type,
+                    message_type="assistant",
+                    cache_hit=cache_hit,
+                    rag_used=rag_used
+                )
+                
+                response_content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+                
+                return ChatResponse(
+                    response=response_content,
+                    session_id=session_id,
+                    message_type=message_type,
+                    rag_used=rag_used,
+                    cache_hit=cache_hit,
+                    timestamp=datetime.now()
+                )
+            else:
+                raise HTTPException(status_code=500, detail="No response generated")
+                
+        except Exception as e:
+            # Track application error
+            monitoring.track_application_error(
+                error_type="system",
+                component="chat_endpoint",
+                error=e,
+                user_type=user_type,
+                endpoint="/chat",
+                function="chat"
             )
-        else:
-            raise HTTPException(status_code=500, detail="No response generated")
-            
-    except Exception as e:
-        web_logger.error(f"Chat processing error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
+            web_logger.error(f"Chat processing error: {e}")
+            raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
 
 @app.get("/status", response_model=SystemStatus)
 async def get_system_status():
