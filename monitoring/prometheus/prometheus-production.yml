@@ -1,0 +1,101 @@
+# Production Prometheus Configuration for Crowd Due Dill
+# Optimized for production monitoring with external app targets
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    monitor: 'crowd-due-dill-production'
+    env: 'production'
+    cluster: 'main'
+
+# No alerting rules since we're using Grafana alerts
+rule_files: []
+
+# No alertmanager configuration needed
+alerting: {}
+
+scrape_configs:
+  # Self-monitoring: Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /prometheus/metrics
+    params:
+      format: ['prometheus']
+
+  # Main Application: Crowd Due Dill API
+  - job_name: 'crowd-due-dill-api'
+    static_configs:
+      - targets: ['crowd-due-dill-backend:8001']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'crowd-due-dill-production'
+      - target_label: service
+        replacement: 'api'
+      - target_label: component
+        replacement: 'backend'
+      - target_label: environment
+        replacement: 'production'
+
+  # Application Health Check
+  - job_name: 'crowd-due-dill-health'
+    static_configs:
+      - targets: ['crowd-due-dill-backend:8001']
+    scrape_interval: 30s
+    metrics_path: /health
+    scrape_timeout: 5s
+    relabel_configs:
+      - target_label: service
+        replacement: 'health'
+      - target_label: environment
+        replacement: 'production'
+
+  # System Metrics: Node Exporter
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'production-server'
+      - target_label: service
+        replacement: 'system'
+      - target_label: environment
+        replacement: 'production'
+
+  # Container Metrics: cAdvisor
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    relabel_configs:
+      - target_label: service
+        replacement: 'containers'
+      - target_label: environment
+        replacement: 'production'
+
+  # Nginx Proxy Metrics (if nginx-prometheus-exporter is added)
+  - job_name: 'nginx-proxy'
+    static_configs:
+      - targets: ['nginx-proxy:9113']
+    scrape_interval: 30s
+    scrape_timeout: 5s
+    relabel_configs:
+      - target_label: service
+        replacement: 'proxy'
+      - target_label: environment
+        replacement: 'production'
+    # This target might not exist initially, so we'll make it optional
+    honor_labels: true
+
+# Storage configuration for production
+# Note: Retention is set via command line flags in docker-compose 
