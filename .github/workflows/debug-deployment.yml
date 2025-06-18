@@ -1,0 +1,114 @@
+name: Debug Deployment Issues
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Debug Environment
+      run: |
+        echo "🔍 GitHub Actions Environment Debug"
+        echo "Runner OS: $RUNNER_OS"
+        echo "GitHub Actor: $GITHUB_ACTOR"
+        echo "GitHub Repository: $GITHUB_REPOSITORY"
+        echo "GitHub Event: $GITHUB_EVENT_NAME"
+        echo "Working Directory: $(pwd)"
+        echo "Git Commit: $GITHUB_SHA"
+        echo ""
+        
+    - name: Test SSH Connection
+      run: |
+        echo "🔑 Testing SSH Connection..."
+        # Test if SSH key is properly configured
+        if [ -z "${{ secrets.SSH_KEY }}" ]; then
+          echo "❌ SSH_KEY secret is not configured"
+          exit 1
+        else
+          echo "✅ SSH_KEY secret is configured"
+        fi
+        
+        if [ -z "${{ secrets.HOST }}" ]; then
+          echo "❌ HOST secret is not configured"
+          exit 1
+        else
+          echo "✅ HOST secret is configured: ${{ secrets.HOST }}"
+        fi
+        
+        if [ -z "${{ secrets.USERNAME }}" ]; then
+          echo "❌ USERNAME secret is not configured"
+          exit 1
+        else
+          echo "✅ USERNAME secret is configured: ${{ secrets.USERNAME }}"
+        fi
+        
+        # Create SSH key file
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        # Add host to known_hosts
+        ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+        
+        # Test basic SSH connection
+        echo "Testing SSH connection..."
+        ssh -o ConnectTimeout=10 ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful'"
+        
+    - name: Test Server Environment
+      run: |
+        echo "🖥️ Testing Production Server Environment..."
+        ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+          echo 'Server information:'
+          uname -a
+          echo ''
+          echo 'Docker version:'
+          docker --version
+          echo ''
+          echo 'Git version:'
+          git --version
+          echo ''
+          echo 'Current directory contents:'
+          ls -la /root/
+          echo ''
+          echo 'Repository status:'
+          if [ -d '/root/Crowd-Due-Dill' ]; then
+            cd /root/Crowd-Due-Dill
+            echo 'Repository exists at /root/Crowd-Due-Dill'
+            git status
+            echo ''
+            git log --oneline -3
+            echo ''
+            git remote -v
+          else
+            echo 'Repository does not exist at /root/Crowd-Due-Dill'
+          fi
+        "
+        
+    - name: Test Docker Environment
+      run: |
+        echo "🐳 Testing Docker Environment..."
+        ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+          echo 'Docker containers:'
+          docker ps -a
+          echo ''
+          echo 'Docker images:'
+          docker images | head -10
+          echo ''
+          echo 'Docker compose file exists:'
+          if [ -f '/root/Crowd-Due-Dill/docker-compose.production.yml' ]; then
+            echo 'docker-compose.production.yml exists'
+            ls -la /root/Crowd-Due-Dill/docker-compose.production.yml
+          else
+            echo 'docker-compose.production.yml NOT found'
+          fi
+        "
+        
+    - name: Test Health Endpoint
+      run: |
+        echo "🏥 Testing Health Endpoint..."
+        curl -v https://crowd-reg.beautiful-apps.com/health || echo "Health check failed" 
