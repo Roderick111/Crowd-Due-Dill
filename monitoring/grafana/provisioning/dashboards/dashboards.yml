@@ -1,12 +1,10 @@
 apiVersion: 1
 
 providers:
-  - name: 'default'
-    orgId: 1
-    folder: ''
+  - name: 'crowd-due-dill-dashboards'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10
     allowUiUpdates: true
     options:
-      path: /etc/grafana/dashboards 
+      path: /var/lib/grafana/dashboards 
