@@ -18,13 +18,13 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
-      - '--web.external-url=https://${MONITORING_DOMAIN}/prometheus/'
+      - '--web.external-url=https://${DOMAIN_NAME}/prometheus/'
       - '--web.route-prefix=/prometheus/'
     environment:
-      - VIRTUAL_HOST=${MONITORING_DOMAIN}
+      - VIRTUAL_HOST=${DOMAIN_NAME}
       - VIRTUAL_PATH=/prometheus/
       - VIRTUAL_PORT=9090
-      - LETSENCRYPT_HOST=${MONITORING_DOMAIN}
+      - LETSENCRYPT_HOST=${DOMAIN_NAME}
       - LETSENCRYPT_EMAIL=${SSL_EMAIL}
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
@@ -44,17 +44,17 @@ services:
     container_name: crowd-due-dill-grafana
     restart: unless-stopped
     environment:
-      # Domain and SSL configuration
-      - VIRTUAL_HOST=${MONITORING_DOMAIN}
-      - VIRTUAL_PATH=/
+      # Domain and SSL configuration - PATH-BASED ROUTING
+      - VIRTUAL_HOST=${DOMAIN_NAME}
+      - VIRTUAL_PATH=/monitoring/
       - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=${MONITORING_DOMAIN}
+      - LETSENCRYPT_HOST=${DOMAIN_NAME}
       - LETSENCRYPT_EMAIL=${SSL_EMAIL}
       
-      # Grafana configuration
-      - GF_SERVER_ROOT_URL=https://${MONITORING_DOMAIN}/
-      - GF_SERVER_SERVE_FROM_SUB_PATH=false
-      - GF_SERVER_DOMAIN=${MONITORING_DOMAIN}
+      # Grafana configuration for path-based deployment
+      - GF_SERVER_ROOT_URL=https://${DOMAIN_NAME}/monitoring/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_DOMAIN=${DOMAIN_NAME}
       - GF_SERVER_ENFORCE_DOMAIN=true
       
       # Security settings
