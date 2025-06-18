@@ -48,8 +48,52 @@ from src.core import (
 )
 from src.utils.logger import logger
 
-# Import monitoring system
-from monitoring import setup_monitoring
+# Import monitoring system (optional for separate monitoring deployment)
+try:
+    from monitoring import setup_monitoring
+    MONITORING_AVAILABLE = True
+except ImportError:
+    MONITORING_AVAILABLE = False
+    
+    # Fallback monitoring setup for when monitoring runs in separate container
+    class MockMonitoring:
+        def track_application_error(self, **kwargs):
+            pass
+        def track_request_start(self, **kwargs):
+            return {}
+        def track_request_end(self, **kwargs):
+            pass
+        def track_chat_message(self, **kwargs):
+            pass
+        def increment_business_metric(self, **kwargs):
+            pass
+        def set_component_healthy(self, component):
+            pass
+        def set_component_degraded(self, component):
+            pass
+        def set_component_unhealthy(self, component):
+            pass
+    
+    def setup_monitoring(app):
+        """Mock monitoring setup when using separate monitoring container"""
+        from prometheus_fastapi_instrumentator import Instrumentator
+        
+        # Basic Prometheus instrumentator for /metrics endpoint
+        instrumentator = Instrumentator(
+            should_group_status_codes=False,
+            should_ignore_untemplated=True,
+            should_respect_env_var=True,
+            should_instrument_requests_inprogress=True,
+            excluded_handlers=[".*admin.*", "/metrics"],
+            env_var_name="ENABLE_METRICS",
+            inprogress_name="http_requests_inprogress",
+            inprogress_labels=True,
+        )
+        
+        instrumentator.instrument(app)
+        instrumentator.expose(app, endpoint="/metrics")
+        
+        return MockMonitoring()
 
 # Configure logging for web API
 logging.basicConfig(level=logging.INFO)
