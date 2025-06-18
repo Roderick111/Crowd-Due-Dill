@@ -1,0 +1,136 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Crowd Due Dill - Basic Monitoring",
+    "tags": ["crowd-due-dill", "monitoring"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System CPU Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 60},
+                {"color": "red", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Memory Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 85}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Container CPU Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"crowd-due-dill.*\"}[5m]) * 100",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Container Memory Usage",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"crowd-due-dill.*\"} / 1024 / 1024",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "megabytes"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "HTTP Requests Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(crowdfunding_api_requests_total[5m])",
+            "legendFormat": "{{method}} {{handler}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Chat Messages",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(chat_messages_total[5m])",
+            "legendFormat": "{{user_type}} messages"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "msgps"
+          }
+        }
+      }
+    ]
+  }
+} 
