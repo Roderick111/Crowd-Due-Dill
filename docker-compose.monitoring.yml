@@ -16,13 +16,10 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
-      - '--web.external-url=https://${DOMAIN_NAME}/prometheus/'
-      - '--web.route-prefix=/prometheus/'
     environment:
-      - VIRTUAL_HOST=${DOMAIN_NAME}
-      - VIRTUAL_PATH=/prometheus/
+      - VIRTUAL_HOST=prometheus.${DOMAIN_NAME}
       - VIRTUAL_PORT=9090
-      - LETSENCRYPT_HOST=${DOMAIN_NAME}
+      - LETSENCRYPT_HOST=prometheus.${DOMAIN_NAME}
       - LETSENCRYPT_EMAIL=${SSL_EMAIL}
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
@@ -31,7 +28,7 @@ services:
       - monitoring
       - proxy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/prometheus/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -42,17 +39,15 @@ services:
     container_name: crowd-due-dill-grafana
     restart: unless-stopped
     environment:
-      # Domain and SSL configuration - PATH-BASED ROUTING
-      - VIRTUAL_HOST=${DOMAIN_NAME}
-      - VIRTUAL_PATH=/monitoring/
+      # Domain and SSL configuration - SUBDOMAIN-BASED ROUTING
+      - VIRTUAL_HOST=grafana.${DOMAIN_NAME}
       - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=${DOMAIN_NAME}
+      - LETSENCRYPT_HOST=grafana.${DOMAIN_NAME}
       - LETSENCRYPT_EMAIL=${SSL_EMAIL}
       
-      # Grafana configuration for path-based deployment
-      - GF_SERVER_ROOT_URL=https://${DOMAIN_NAME}/monitoring/
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
-      - GF_SERVER_DOMAIN=${DOMAIN_NAME}
+      # Grafana configuration for subdomain deployment
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN_NAME}/
+      - GF_SERVER_DOMAIN=grafana.${DOMAIN_NAME}
       - GF_SERVER_ENFORCE_DOMAIN=true
       
       # Security settings
