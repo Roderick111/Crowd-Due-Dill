@@ -536,10 +536,12 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         # Add user message to state
         current_state["messages"].append(HumanMessage(content=request.message))
         
+        # Import functions needed for both temporary and persistent sessions
+        from src.main import llm, classify_and_decide_rag, create_agent_response
+        
         if is_temporary:
             # For temporary sessions, process directly without database persistence
             # Use a simple direct approach without graph/checkpointer
-            from src.main import llm, rag_system, classify_and_decide_rag, create_agent_response
             
             # Create a simple state for processing
             simple_state = {
