@@ -73,6 +73,16 @@ except ImportError:
             pass
         def set_component_unhealthy(self, component):
             pass
+        def track_request_performance(self, endpoint, user_type, **kwargs):
+            """Mock context manager for request performance tracking"""
+            from contextlib import nullcontext
+            return nullcontext()
+        def track_memory_operation(self, **kwargs):
+            pass
+        def track_document_operation(self, **kwargs):
+            pass
+        def update_session_count(self, **kwargs):
+            pass
     
     def setup_monitoring(app):
         """Mock monitoring setup when using separate monitoring container"""
