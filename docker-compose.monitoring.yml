@@ -16,11 +16,6 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
-    environment:
-      - VIRTUAL_HOST=prometheus.${DOMAIN_NAME}
-      - VIRTUAL_PORT=9090
-      - LETSENCRYPT_HOST=prometheus.${DOMAIN_NAME}
-      - LETSENCRYPT_EMAIL=${SSL_EMAIL}
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
@@ -40,24 +35,13 @@ services:
     image: grafana/grafana:11.3.0
     container_name: crowd-due-dill-grafana
     restart: unless-stopped
-    environment:
-      # Domain and SSL configuration - SUBDOMAIN-BASED ROUTING
-      - VIRTUAL_HOST=grafana.${DOMAIN_NAME}
-      - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=grafana.${DOMAIN_NAME}
-      - LETSENCRYPT_EMAIL=${SSL_EMAIL}
-      
-      # Grafana configuration for subdomain deployment
-      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN_NAME}/
-      - GF_SERVER_DOMAIN=grafana.${DOMAIN_NAME}
-      - GF_SERVER_ENFORCE_DOMAIN=true
-      
+    environment:      
       # Security settings
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY}
-      - GF_SECURITY_COOKIE_SECURE=true
-      - GF_SECURITY_COOKIE_SAMESITE=strict
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=lax
       
       # Email configuration for alerts
       - GF_SMTP_ENABLED=true
