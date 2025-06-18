@@ -22,7 +22,7 @@ ARG UID=10001
 RUN adduser \
     --disabled-password \
     --gecos "" \
-    --home "/nonexistent" \
+    --home "/app" \
     --shell "/sbin/nologin" \
     --no-create-home \
     --uid "${UID}" \
@@ -52,10 +52,7 @@ COPY --chown=appuser:appuser requirements.txt .
 
 # Download dependencies as a separate step to take advantage of Docker's caching
 # Install packages as appuser to avoid permission warnings
-RUN python -m pip install --user --no-cache-dir -r requirements.txt
-
-# Add user-installed packages to PATH
-ENV PATH="/app/.local/bin:${PATH}"
+RUN python -m pip install --no-cache-dir -r requirements.txt
 
 # Copy the source code into the container
 COPY --chown=appuser:appuser . .
