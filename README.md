@@ -558,4 +558,4 @@ This system is designed to assist with regulatory compliance research and analys
 - **Context-Aware Responses**: Maintains legal consultation continuity
 - **Performance Analytics**: Comprehensive statistics and monitoring
 - **Clean Command System**: Organized command handling with registry pattern
-- **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy 
+- **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy # Testing deployment fix
