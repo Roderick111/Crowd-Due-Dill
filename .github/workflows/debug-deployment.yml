@@ -47,22 +47,22 @@ jobs:
           echo "✅ USERNAME secret is configured: ${{ secrets.USERNAME }}"
         fi
         
-        # Create SSH key file
+        # Create SSH key file (Ed25519 format)
         mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
         
         # Add host to known_hosts
         ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
         
         # Test basic SSH connection
         echo "Testing SSH connection..."
-        ssh -o ConnectTimeout=10 ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful'"
+        ssh -i ~/.ssh/id_ed25519 -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "echo 'SSH connection successful'"
         
     - name: Test Server Environment
       run: |
         echo "🖥️ Testing Production Server Environment..."
-        ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+        ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
           echo 'Server information:'
           uname -a
           echo ''
@@ -92,7 +92,7 @@ jobs:
     - name: Test Docker Environment
       run: |
         echo "🐳 Testing Docker Environment..."
-        ssh ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
+        ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.USERNAME }}@${{ secrets.HOST }} "
           echo 'Docker containers:'
           docker ps -a
           echo ''
