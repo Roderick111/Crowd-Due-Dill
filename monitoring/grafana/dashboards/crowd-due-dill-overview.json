@@ -53,7 +53,7 @@
         },
         "orientation": "auto",
         "textMode": "value_and_name",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "center",
         "displayMode": "table"
