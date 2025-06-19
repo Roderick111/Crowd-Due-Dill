@@ -26,6 +26,37 @@ scrape_configs:
     params:
       format: ['prometheus']
 
+  - job_name: 'app-health-check'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Expects HTTP 200 response
+    static_configs:
+      - targets:
+        - https://crowd-reg.beautiful-apps.com/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target] 
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: service
+        replacement: 'health'
+      - target_label: environment
+        replacement: 'production'
+
+  # Nginx Proxy Metrics
+  - job_name: 'nginx-proxy'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: 'proxy'
+      - target_label: environment
+        replacement: 'production'
+
+
   # Main Application: Crowd Due Dill API
   - job_name: 'crowd-due-dill-api'
     static_configs:
