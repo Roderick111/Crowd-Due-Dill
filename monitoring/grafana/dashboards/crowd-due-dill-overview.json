@@ -17,7 +17,7 @@
         {
           "expr": "up",
           "refId": "A",
-          "legendFormat": "{{job}} - {{instance}}"
+          "legendFormat": "{{job}}"
         }
       ],
       "fieldConfig": {
@@ -45,7 +45,20 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "displayMode": "table"
+      },
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0}
     },
     {
       "id": 2,
@@ -72,7 +85,7 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6}
     },
     {
       "id": 3,
@@ -99,7 +112,7 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6}
     },
     {
       "id": 4,
@@ -117,7 +130,7 @@
           "unit": "decmbytes"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
     },
     {
       "id": 5,
@@ -135,7 +148,7 @@
           "unit": "percent"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
     },
     {
       "id": 6,
@@ -158,7 +171,7 @@
           "unit": "binBps"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22}
     },
     {
       "id": 7,
@@ -185,7 +198,7 @@
           }
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22}
     },
     {
       "id": 8,
@@ -213,7 +226,7 @@
           "unit": "short"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 30}
     }
   ]
 } 
