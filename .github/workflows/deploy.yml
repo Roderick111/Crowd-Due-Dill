@@ -31,6 +31,18 @@ jobs:
           echo "📋 Git status before pull:"
           git status --porcelain
           
+          # Handle nginx-status.conf conflict
+          echo "🔧 Resolving potential nginx-status.conf conflict..."
+          if [ -f "nginx/nginx-status.conf" ] && ! git ls-files --error-unmatch nginx/nginx-status.conf > /dev/null 2>&1; then
+            echo "Found untracked nginx-status.conf, removing to allow git pull..."
+            rm -f nginx/nginx-status.conf
+          fi
+          
+          # Clean up other untracked files that might conflict
+          echo "🧹 Cleaning up untracked files..."
+          rm -f .env.monitoring
+          rm -f docker-compose.production.yml.backup
+          
           # Pull latest changes (ensure SSH remote is set)
           echo "📥 Pulling latest changes..."
           git remote set-url origin git@github.com:Roderick111/Crowd-Due-Dill.git
