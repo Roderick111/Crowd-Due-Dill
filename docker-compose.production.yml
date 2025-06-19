@@ -136,53 +136,7 @@ services:
           memory: 512M
           cpus: '0.5'
 
-  # Blackbox Exporter for Health Monitoring
-  blackbox-exporter:
-    image: prom/blackbox-exporter:latest
-    container_name: crowd-due-dill-blackbox
-    restart: unless-stopped
-    ports:
-      - "9115:9115"  # Expose port 9115
-    volumes:
-      - ./monitoring/blackbox:/etc/blackbox_exporter:ro
-    networks:
-      - monitoring  # Connect to monitoring network
-      - default
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9115/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.1'
 
-  # Nginx Prometheus Exporter
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:latest
-    container_name: crowd-due-dill-nginx-exporter
-    restart: unless-stopped
-    ports:
-      - "9113:9113"
-    command:
-      - '-nginx.scrape-uri=http://crowd-due-dill-proxy:8081/nginx_status'
-    networks:
-      - monitoring
-      - default
-    depends_on:
-      - nginx-proxy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9113/metrics"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-          cpus: '0.1'
 
 # Persistent volumes for data
 volumes:
