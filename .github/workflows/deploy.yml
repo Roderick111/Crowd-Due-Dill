@@ -1,9 +1,9 @@
 name: Deploy Crowd Due Dill to Production
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  # push:
+  #   branches: [ main ]  # Disabled automatic deployment
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   deploy:
