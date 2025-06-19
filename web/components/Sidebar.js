@@ -197,10 +197,7 @@ const Sidebar = ({
             {/* Sidebar Header */}
             <div className="h-16 px-4 border-b border-gray-700 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 flex items-center justify-center">
-                        <span className="text-2xl">⚖️</span>
-                    </div>
-                    <span className="font-semibold">Crowdfunding DD</span>
+                    <span className="font-semibold">EU Crowdfunding</span>
                 </div>
                 <button
                     onClick={() => setSidebarOpen(false)}
