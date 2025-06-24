@@ -62,9 +62,9 @@ class CrowdDueDillLogger:
         """Log Q&A cache hits (always shown)."""
         print(f"⚡ Q&A Cache Hit! Similarity: {similarity:.3f} for: '{query_preview}...'")
     
-    def rag_retrieval(self, chunks_count: int, domains: list):
+    def rag_retrieval(self, chunk_count: int):
         """Log successful RAG retrieval."""
-        self.info(f"📚 RAG: Retrieved {chunks_count} chunks")
+        self.info(f"📚 RAG: Retrieved {chunk_count} chunks")
     
     def command_executed(self, command: str, result: str = ""):
         """Log command execution (always shown)."""

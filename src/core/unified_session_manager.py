@@ -112,13 +112,14 @@ class UnifiedSessionManager:
             current_state = self.graph.get_state(config)
             
             if current_state and current_state.values:
-                # Update activity timestamp and message count
-                metadata = current_state.values.get("session_metadata", {})
-                metadata["last_activity"] = datetime.now().isoformat()
-                metadata["message_count"] = metadata.get("message_count", 0) + 1
+                # Update activity timestamp and message count directly in flat structure
+                updates = {
+                    "last_activity": datetime.now().isoformat(),
+                    "message_count": current_state.values.get("message_count", 0) + 1
+                }
                 
                 # Update state
-                self.graph.update_state(config, {"session_metadata": metadata})
+                self.graph.update_state(config, updates)
                 return True
                 
         except Exception as e:

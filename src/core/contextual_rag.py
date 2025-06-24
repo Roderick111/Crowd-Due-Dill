@@ -274,7 +274,7 @@ class OptimizedContextualRAGSystem:
         response_time = time.time() - start_time
         
         # Log retrieval success
-        logger.rag_retrieval(len(docs), [])
+        logger.rag_retrieval(len(docs))
         
         # Record performance stats
         if self.stats_collector:

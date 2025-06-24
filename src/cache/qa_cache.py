@@ -2,11 +2,6 @@
 """
 Q&A Cache System for Crowd Due Dill
 
-Provides semantic caching for question-answer pairs with:
-- Vector similarity search
-- Cache hit/miss tracking
-- Performance optimization
-- Configurable similarity thresholds
 """
 
 import os
