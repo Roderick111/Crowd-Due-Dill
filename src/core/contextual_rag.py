@@ -20,6 +20,7 @@ from langchain_core.documents import Document
 
 from .stats_collector import StatsCollector
 from .resilience_manager import resilience_manager
+from src.vectorization.metadata_system import MetadataManager
 from src.utils.logger import logger
 
 
@@ -46,6 +47,7 @@ class OptimizedContextualRAGSystem:
         
         # Initialize components
         self.stats_collector = StatsCollector()
+        self.metadata_manager = MetadataManager()  # Initialize metadata system
         self.embeddings = None
         self.chroma_client = None
         self.vectorstore = None

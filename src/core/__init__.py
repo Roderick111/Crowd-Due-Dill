@@ -23,6 +23,17 @@ from .auth0_middleware import (
 from .stripe_service import stripe_service
 from .auth0_management import auth0_management
 
+# Import and expose metadata system from vectorization module
+from src.vectorization.metadata_system import (
+    MetadataManager,
+    MetadataSchema,
+    ChromaDBQueryHelper,
+    DocumentMetadata,
+    StructuralMetadata,
+    ContentMetadata,
+    ProcessingMetadata
+)
+
 __all__ = [
     'OptimizedContextualRAGSystem',
     'DomainManager', 
@@ -45,4 +56,12 @@ __all__ = [
     'stripe_service',
     # Auth0 Management API
     'auth0_management',
+    # Metadata system
+    'MetadataManager',
+    'MetadataSchema',
+    'ChromaDBQueryHelper',
+    'DocumentMetadata',
+    'StructuralMetadata',
+    'ContentMetadata',
+    'ProcessingMetadata',
 ]
