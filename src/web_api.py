@@ -28,7 +28,6 @@ load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.main import (
-    domain_manager,
     handle_command,
     memory_manager,
     qa_cache,
@@ -553,7 +552,6 @@ async def health_check():
         # Update component health status
         monitoring.set_component_healthy("web_api")
         monitoring.set_component_healthy("rag_system")
-        monitoring.set_component_healthy("domain_manager")
         monitoring.set_component_healthy("session_manager")
         
         # Check Auth0 status
@@ -567,7 +565,6 @@ async def health_check():
             "timestamp": datetime.now().isoformat(),
             "components": {
                 "rag_system": "operational",
-                "domain_manager": "operational", 
                 "session_manager": "operational",
                 "auth0": auth0_status,
                 "active_domains": domain_status.get("active_domains", [])
