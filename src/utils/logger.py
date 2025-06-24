@@ -62,10 +62,9 @@ class CrowdDueDillLogger:
         """Log Q&A cache hits (always shown)."""
         print(f"⚡ Q&A Cache Hit! Similarity: {similarity:.3f} for: '{query_preview}...'")
     
-    def rag_retrieval(self, chunk_count: int, domains: list):
-        """Log RAG retrieval results (always shown)."""
-        domain_str = f"from domains: {domains}" if domains else "from all domains"
-        print(f"📚 Retrieved {chunk_count} chunks {domain_str}")
+    def rag_retrieval(self, chunks_count: int, domains: list):
+        """Log successful RAG retrieval."""
+        self.info(f"📚 RAG: Retrieved {chunks_count} chunks")
     
     def command_executed(self, command: str, result: str = ""):
         """Log command execution (always shown)."""
@@ -89,10 +88,6 @@ class CrowdDueDillLogger:
     def negative_intent(self, query_preview: str):
         """Log negative intent detection (always shown)."""
         print(f"🛡️ Negative intent detected - bypassing Q&A cache, using RAG for: '{query_preview}...'")
-    
-    def domain_blocked(self, domains: list):
-        """Log domain blocking (always shown)."""
-        print(f"🚫 No content found in active domains: {domains}")
     
     def debug(self, message: str):
         """Log debug messages (only in debug mode)."""

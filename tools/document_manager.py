@@ -865,17 +865,15 @@ Please give a short succinct context to situate this chunk within the overall do
         
         return success
     
-    def list_documents(self, domain: Optional[str] = None) -> List[DocumentRecord]:
-        """List all documents or documents for a specific domain"""
-        if domain:
-            return [record for record in self.registry.values() if record.domain == domain]
+    def list_documents(self) -> List[DocumentRecord]:
+        """List all documents"""
         return list(self.registry.values())
     
     def get_document_info(self, filepath: str) -> Optional[DocumentRecord]:
         """Get information about a specific document"""
         return self.registry.get(filepath)
     
-    def validate_documents(self, domain: Optional[str] = None) -> Dict[str, List[str]]:
+    def validate_documents(self) -> Dict[str, List[str]]:
         """Validate documents for missing files, changes, and vectorstore consistency"""
         print("🔍 Validating documents...")
         
@@ -886,11 +884,8 @@ Please give a short succinct context to situate this chunk within the overall do
             "orphaned_chunks": []
         }
         
-        # Check registry entries
-        documents_to_check = [
-            record for record in self.registry.values()
-            if domain is None or record.domain == domain
-        ]
+        # Check all registry entries
+        documents_to_check = list(self.registry.values())
         
         for record in documents_to_check:
             if not os.path.exists(record.filepath):
@@ -902,12 +897,12 @@ Please give a short succinct context to situate this chunk within the overall do
         
         return issues
     
-    def fix_vectorstore_inconsistencies(self, domain: Optional[str] = None) -> bool:
+    def fix_vectorstore_inconsistencies(self) -> bool:
         """Fix vectorstore inconsistencies by re-adding mismatched documents"""
         print("🔧 Fixing vectorstore inconsistencies...")
         
         try:
-            issues = self.validate_documents(domain)
+            issues = self.validate_documents()
             
             if not any(issues.values()):
                 print("✅ No inconsistencies found")
@@ -924,7 +919,6 @@ Please give a short succinct context to situate this chunk within the overall do
         """Get comprehensive processing statistics"""
         return {
             "total_documents": len(self.registry),
-            "domains": list(set(record.domain for record in self.registry.values())),
             "total_chunks": sum(record.chunk_count for record in self.registry.values()),
             "contextualized_documents": sum(1 for record in self.registry.values() if record.contextualized),
             "non_contextualized_documents": sum(1 for record in self.registry.values() if not record.contextualized),
@@ -1406,8 +1400,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Document Manager for Vector Database")
     parser.add_argument("command", choices=["add", "update", "remove", "list", "validate", "info", "fix", "batch", "stats", "cleanup", "detect", "rebuild"])
     parser.add_argument("filepath", nargs="?", help="Path to document file or batch file")
-    parser.add_argument("--domain", help="Document domain")
-
     parser.add_argument("--no-contextualize", action="store_true", help="Skip contextualization (enabled by default for enhanced retrieval)")
     parser.add_argument("--no-extraction", action="store_true", help="Skip LLM metadata extraction (enabled by default)")
     parser.add_argument("--workers", type=int, help="Number of parallel workers (default: auto-configure)")
@@ -1435,22 +1427,25 @@ if __name__ == "__main__":
     
     manager = SimpleDocumentManager(config=config)
     
+    # Default domain for all operations - no longer required as parameter
+    default_domain = "eu_crowdfunding"
+    
     if args.command == "add":
-        if not args.filepath or not args.domain:
-            print("❌ Error: 'add' command requires filepath and --domain")
+        if not args.filepath:
+            print("❌ Error: 'add' command requires filepath")
             sys.exit(1)
         
         contextualize = not args.no_contextualize
-        success = manager.add_document(args.filepath, args.domain, contextualize)
+        success = manager.add_document(args.filepath, default_domain, contextualize)
         sys.exit(0 if success else 1)
     
     elif args.command == "update":
-        if not args.filepath or not args.domain:
-            print("❌ Error: 'update' command requires filepath and --domain")
+        if not args.filepath:
+            print("❌ Error: 'update' command requires filepath")
             sys.exit(1)
         
         contextualize = not args.no_contextualize
-        success = manager.update_document(args.filepath, args.domain, contextualize)
+        success = manager.update_document(args.filepath, default_domain, contextualize)
         sys.exit(0 if success else 1)
     
     elif args.command == "remove":
@@ -1462,7 +1457,7 @@ if __name__ == "__main__":
         sys.exit(0 if success else 1)
     
     elif args.command == "list":
-        documents = manager.list_documents(args.domain)
+        documents = manager.list_documents()  # No domain filter needed
         if documents:
             print(f"📚 Found {len(documents)} documents:")
             for doc in documents:
@@ -1488,7 +1483,7 @@ if __name__ == "__main__":
             sys.exit(1)
             
     elif args.command == "validate":
-        issues = manager.validate_documents(args.domain)
+        issues = manager.validate_documents()  # No domain filter needed
         if any(issues.values()):
             print("❌ Issues found:")
             for issue_type, files in issues.items():
@@ -1503,7 +1498,7 @@ if __name__ == "__main__":
             print("✅ All documents validated successfully")
             
     elif args.command == "fix":
-        success = manager.fix_vectorstore_inconsistencies(args.domain)
+        success = manager.fix_vectorstore_inconsistencies()  # No domain filter needed
         sys.exit(0 if success else 1)
         
     elif args.command == "batch":
@@ -1517,15 +1512,21 @@ if __name__ == "__main__":
                 batch_data = json.load(f)
             
             if not isinstance(batch_data, list):
-                print("❌ Error: Batch file must contain a JSON array of {filepath, domain} objects")
+                print("❌ Error: Batch file must contain a JSON array of {filepath} objects")
                 sys.exit(1)
             
             file_domain_pairs = []
             for item in batch_data:
-                if not isinstance(item, dict) or 'filepath' not in item or 'domain' not in item:
-                    print("❌ Error: Each batch item must have 'filepath' and 'domain' fields")
+                if isinstance(item, str):
+                    # Simple filepath string
+                    file_domain_pairs.append((item, default_domain))
+                elif isinstance(item, dict) and 'filepath' in item:
+                    # Object with filepath (domain optional, defaults to eu_crowdfunding)
+                    domain = item.get('domain', default_domain)
+                    file_domain_pairs.append((item['filepath'], domain))
+                else:
+                    print("❌ Error: Each batch item must be a filepath string or object with 'filepath' field")
                     sys.exit(1)
-                file_domain_pairs.append((item['filepath'], item['domain']))
             
             contextualize = not args.no_contextualize
             results = manager.add_documents_batch(file_domain_pairs, contextualize)

@@ -29,12 +29,13 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
 from core.contextual_rag import OptimizedContextualRAGSystem
-from core.domain_manager import DomainManager
+from core.resilience_manager import resilience_manager
+from core.stats_collector import StatsCollector
+from core.unified_session_manager import UnifiedSessionManager
 from cache.negative_intent_detector import NegativeIntentDetector
 from cache.qa_cache import QACache
 from utils.logger import logger, set_debug_mode
 from memory import MemoryManager
-from core.unified_session_manager import UnifiedSessionManager
 from utils.command_handler import command_handler
 
 
@@ -44,11 +45,10 @@ load_dotenv()
 llm = init_chat_model("gemini-2.0-flash-001", model_provider="google_genai")
 
 # Initialize system components
-# Using simplified domain manager (always eu_crowdfunding)
-domain_manager = DomainManager()
+# Simplified system without domain complexity
 negative_detector = NegativeIntentDetector()
 qa_cache = QACache()
-rag_system = OptimizedContextualRAGSystem(domain_manager=domain_manager)
+rag_system = OptimizedContextualRAGSystem()
 
 # Initialize memory manager with stats collector
 memory_manager = MemoryManager(llm, rag_system.stats_collector)
@@ -124,67 +124,36 @@ def router(state: State):
     message_type = state.get("message_type", "analytical")
     return {"next": "advisory" if message_type == "advisory" else "analytical"}
 
-def get_rag_context(user_message: str, should_use_rag: bool) -> dict:
-    """Get RAG context with simplified flow (Q&A cache disabled)."""
+def get_rag_context(query: str, should_use_rag: bool) -> dict:
+    """Get RAG context for the query."""
+    if not should_use_rag:
+        return {"type": "no_rag", "content": ""}
+    
     try:
-        if not should_use_rag:
-            return {"type": "no_rag", "content": ""}
+        # Use RAG system for retrieval
+        rag_result = rag_system.query(query, k=4)
         
-        # Check for negative intent - if detected, log it
-        force_rag = negative_detector.has_negative_intent(user_message)
-        if force_rag:
-            logger.negative_intent(user_message[:50])
+        # Check if we got results
+        query_type = rag_result.get("metadata", {}).get("query_type", "unknown")
         
-        # Use RAG system for retrieval with domain filtering
-        rag_result = rag_system.query(user_message, k=4)
+        if query_type == "rag" and rag_result.get("chunks"):
+            # Build context from chunks
+            context_parts = []
+            for chunk in rag_result["chunks"]:
+                content = chunk.get("content", "")
+                if content:
+                    context_parts.append(content)
+            
+            if context_parts:
+                context = "\n\n".join(context_parts)
+                return {"type": "rag_context", "content": context}
         
-        # Check if we got chunks
-        if rag_result and rag_result.get("chunks"):
-            chunks_text = "\n\n".join([
-                f"[Chunk {chunk['chunk_id']}]: {chunk['content']}"
-                for chunk in rag_result["chunks"]
-            ])
-            return {"type": "rag_context", "content": chunks_text}
-        
-        # Check if domain was blocked
-        query_type = rag_result.get("metadata", {}).get("query_type", "")
-        if query_type == "domain_blocked":
-            return {"type": "domain_blocked", "content": rag_result.get("response", "")}
-        
+        # No relevant content found
         return {"type": "no_rag", "content": ""}
+        
     except Exception as e:
-        logger.error(f"RAG Error: {e}")
+        logger.error(f"RAG context error: {e}")
         return {"type": "no_rag", "content": ""}
-
-def build_domain_guidance(active_domains: list, agent_type: str) -> str:
-    """Build domain-specific guidance for agents."""
-    if not active_domains:
-        return ""
-    
-    domain_guidance = {
-        "advisory": {
-            "eu_crowdfunding": "- Provide strategic guidance on EU crowdfunding regulations and business implications",
-            "securities_law": "- Address business concerns about securities regulations and investor protection",
-            "compliance": "- Offer practical advice on meeting regulatory obligations and risk management",
-            "best_practices": "- Share industry best practices for strategic regulatory compliance"
-        },
-        "analytical": {
-            "eu_crowdfunding": "- Analyze EU crowdfunding regulations, authorization requirements, and cross-border provisions",
-            "securities_law": "- Break down securities laws, investment limits, and regulatory frameworks",
-            "compliance": "- Provide detailed compliance procedures and regulatory obligations",
-            "best_practices": "- Examine proven compliance strategies and industry standards"
-        }
-    }
-    
-    guidance = [domain_guidance[agent_type][domain] for domain in active_domains if domain in domain_guidance[agent_type]]
-    
-    if guidance:
-        header = "Active knowledge domains for strategic guidance:" if agent_type == "advisory" else "Active knowledge domains for technical analysis:"
-        return f"\n\n{header}\n" + "\n".join(guidance)
-    
-    return ""
-
-
 
 def create_agent_response(state: State, agent_type: str) -> dict:
     """Unified agent response creation for both advisory and analytical agents."""
@@ -246,8 +215,6 @@ Be precise and thorough. Structure your analysis with clear technical headings t
     }
     
     system_content = system_prompts[agent_type]
-    active_domains = rag_system.get_domain_status()["active_domains"]
-    system_content += build_domain_guidance(active_domains, agent_type)
     
     # Add current regulatory context
     try:
@@ -274,12 +241,10 @@ You naturally know this current regulatory context. When asked about current dat
     rag_context = rag_result["content"]
     rag_type = rag_result["type"]
     
-    # Handle different types of RAG responses
-    if rag_type == "domain_blocked":
-        return {"messages": [AIMessage(content=rag_context)], "rag_context": "domain_blocked"}
-    elif rag_type == "rag_context":
+    # Add RAG context if available
+    if rag_type == "rag_context":
         context_verb = "strategic guidance" if agent_type == "advisory" else "technical analysis"
-        system_content += f"\n\nUse this knowledge to inform your {context_verb}:{rag_context}. Never reference chunk numbers or sources, speak as if the knowledge flows directly from your own understanding. You should use it as inspiration, not as a direct quote."
+        system_content += f"\n\nUse this knowledge to inform your {context_verb}:{rag_context}. Never reference chunk numbers. But always reference sources, article numbers, etc."
     
     # Create conversation and get response
     conversation_messages = [{"role": "system", "content": system_content}]
@@ -348,7 +313,6 @@ def print_stats():
         # Use the enhanced stats collector for internal metrics
         rag_system.stats_collector.print_comprehensive_stats(
             vectorstore=rag_system.vectorstore,
-            domain_manager=domain_manager,
             memory_manager=memory_manager
         )
         
@@ -420,21 +384,12 @@ def run_chatbot():
     # System ready message with active domains (only shown once)
     stats = rag_system.get_stats()
     total_chunks = stats.get('vectorstore_docs', 0)
-    active_domains = stats.get('domain_config', {}).get('active_domains', [])
     
     logger.system_ready(f"Ready with {total_chunks} chunks")
     
-    # Show active domains in normal mode
-    if active_domains:
-        active_domains_str = ', '.join(active_domains)
-        print(f"🎯 Active domains: {active_domains_str}")
-    else:
-        print("🎯 Active domains: None")
-    
     print("⚖️ Crowdfunding Due Diligence AI Agent - Development Mode")
-    print("Commands: 'exit', 'stats', 'memory', 'domains', 'cache clear', 'debug on/off'")
+    print("Commands: 'exit', 'stats', 'memory', 'cache clear', 'debug on/off'")
     print("Memory: 'memory enable/disable short', 'memory enable/disable medium'")
-    print("Domains: 'domains enable/disable <domain>'")
     print("Sessions: 'session list', 'session info', 'session change <id|new>'")
     print("Lunar: 'lunar' or 'moon' - Show current lunar phase information")
     print()
@@ -472,8 +427,7 @@ def run_chatbot():
             current_state.update(result)
             
             # Update session activity
-            active_domains = rag_system.get_domain_status().get("active_domains", [])
-            session_manager.update_activity(active_domains)
+            session_manager.update_activity([])
             
             # Update session metadata in state from session manager
             current_session = session_manager.get_current_session()
@@ -488,9 +442,7 @@ def run_chatbot():
                 
                 # Response type indicators
                 cache_indicator = ""
-                if rag_context == "domain_blocked":
-                    cache_indicator = "🚫 "  # Domain blocked
-                elif rag_context:
+                if rag_context:
                     cache_indicator = "🔍 "  # RAG used
                 
                 # Add memory indicator if medium-term memory is being used
@@ -506,6 +458,10 @@ def run_chatbot():
             else:
                 logger.error("No response generated")
                 
+            # Add RAG context to state for tracking
+            current_state["rag_context"] = rag_context
+            current_state["rag_used"] = True
+            
         except Exception as e:
             logger.error(f"Processing error: {e}")
             print("I encountered an error processing your message. Please try again.")

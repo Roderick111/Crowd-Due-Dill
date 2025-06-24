@@ -26,43 +26,41 @@ from src.utils.logger import logger
 
 class OptimizedContextualRAGSystem:
     """
-    Streamlined RAG system with domain-aware retrieval and resilience.
+    Optimized RAG system with ChromaDB and resilience features.
     
     Features:
-    - Direct chunk retrieval for chatbot integration
-    - Multi-domain document filtering  
-    - Circuit breaker protection
-    - Health monitoring
-    - Clean logging
+    - ChromaDB vector database with optimized queries
+    - OpenAI embeddings with resilience
+    - Performance monitoring and statistics
+    - Simplified query interface without domain restrictions
     """
     
     def __init__(self, 
                  chroma_path: str = "data/chroma_db",
-                 collection_name: str = "contextual_rag_collection",
-                 domain_manager = None):
-        """Initialize the RAG system."""
+                 collection_name: str = "contextual_rag_collection"):
+        """
+        Initialize the RAG system.
+        
+        Args:
+            chroma_path: Path to ChromaDB storage
+            collection_name: Name of the ChromaDB collection
+        """
         self.chroma_path = chroma_path
         self.collection_name = collection_name
-        self.domain_manager = domain_manager
         
-        # Initialize components
+        # Initialize core components
         self.stats_collector = StatsCollector()
-        self.metadata_manager = MetadataManager()  # Initialize metadata system
         self.embeddings = None
         self.chroma_client = None
         self.vectorstore = None
         
-        # Setup system
+        # Setup all components
         self._setup_embeddings()
         self._setup_chroma_client()
         self._setup_vectorstore()
         
-        # Log system ready status
-        if self.domain_manager:
-            active_count = len(self.domain_manager.get_active_domains())
-            logger.system_ready(f"RAG System ready - {active_count} domains active")
-        else:
-            logger.system_ready("RAG System ready - no domain filtering")
+        # Log initialization
+        logger.system_ready("RAG System ready - no domain restrictions")
     
     def _setup_embeddings(self):
         """Initialize OpenAI embeddings with resilience."""
@@ -197,18 +195,15 @@ class OptimizedContextualRAGSystem:
             )
         
         try:
-            # Get domain filtering
-            active_domains, domain_filter = self._get_domain_filter()
-            
             # Retrieve documents
-            docs = self._retrieve_documents(query_text, k, domain_filter)
+            docs = self._retrieve_documents(query_text, k)
             
             # Handle no results
             if not docs:
-                return self._handle_no_results(active_domains, domain_filter, start_time)
+                return self._handle_no_results(start_time)
             
             # Process successful results
-            return self._process_results(docs, active_domains, start_time)
+            return self._process_results(docs, start_time)
             
         except Exception as e:
             logger.error(f"RAG query error: {str(e)}")
@@ -217,28 +212,10 @@ class OptimizedContextualRAGSystem:
                 start_time, "error", str(e)
             )
     
-    def _get_domain_filter(self):
-        """Get active domains and create filter."""
-        active_domains = []
-        domain_filter = None
-        
-        if self.domain_manager:
-            domain_status = self.domain_manager.get_domain_status()
-            active_domains = domain_status.get("active_domains", [])
-            
-            if active_domains:
-                domain_filter = {"domain": {"$in": active_domains}}
-                logger.debug(f"Applying domain filter: {domain_filter}")
-        
-        return active_domains, domain_filter
-    
-    def _retrieve_documents(self, query_text: str, k: int, domain_filter: Optional[Dict]):
-        """Retrieve documents with optimization and resilience."""
-        # Standard retrieval
-        if domain_filter:
-            docs = self.vectorstore.similarity_search(query_text, k=k, filter=domain_filter)
-        else:
-            docs = self.vectorstore.similarity_search(query_text, k=k)
+    def _retrieve_documents(self, query_text: str, k: int):
+        """Retrieve documents without domain filtering."""
+        # Simple retrieval without any domain restrictions
+        docs = self.vectorstore.similarity_search(query_text, k=k)
         
         # Try optimized ChromaDB query if available
         if (hasattr(self.vectorstore, '_collection') and 
@@ -246,25 +223,24 @@ class OptimizedContextualRAGSystem:
             self.embeddings):
             
             try:
-                docs = self._optimized_chromadb_query(query_text, k, domain_filter)
+                docs = self._optimized_chromadb_query(query_text, k)  # No domain filter
             except Exception as e:
                 logger.debug_optimization(f"ChromaDB optimization failed, using fallback: {e}")
         
         return docs
     
-    def _optimized_chromadb_query(self, query_text: str, k: int, domain_filter: Optional[Dict]):
-        """Execute optimized ChromaDB query with resilience."""
+    def _optimized_chromadb_query(self, query_text: str, k: int):
+        """Execute optimized ChromaDB query without domain filtering."""
         # Generate embedding with resilience
         def generate_embedding():
             return self.embeddings.embed_query(query_text)
         
         query_embedding = resilience_manager.execute_with_openai_resilience(generate_embedding)
         
-        # Use ChromaDB's optimized query
+        # Use ChromaDB's optimized query without domain filtering
         chroma_results = self.vectorstore._collection.query(
             query_embeddings=[query_embedding],
             n_results=k,
-            where=domain_filter,
             include=["documents", "metadatas", "distances"]
         )
         
@@ -279,45 +255,26 @@ class OptimizedContextualRAGSystem:
         
         return docs
     
-    def _handle_no_results(self, active_domains: List[str], domain_filter: Optional[Dict], start_time: float):
+    def _handle_no_results(self, start_time: float):
         """Handle case when no documents are found."""
         response_time = time.time() - start_time
         
-        if domain_filter:
-            logger.domain_blocked(active_domains)
-            return {
-                "response": f"I currently don't have information about that topic in my active knowledge areas. My current focus areas are: {', '.join(active_domains)}.",
-                "chunks": [],
-                "metadata": {
-                    "total_chunks": 0,
-                    "response_time": response_time,
-                    "query_type": "domain_blocked"
-                }
+        return {
+            "response": "I couldn't find relevant information to answer your question.",
+            "chunks": [],
+            "metadata": {
+                "total_chunks": 0,
+                "response_time": response_time,
+                "query_type": "rag"
             }
-        else:
-            return {
-                "response": "I couldn't find relevant information to answer your question.",
-                "chunks": [],
-                "metadata": {
-                    "total_chunks": 0,
-                    "response_time": response_time,
-                    "query_type": "rag"
-                }
-            }
+        }
     
-    def _process_results(self, docs: List[Document], active_domains: List[str], start_time: float):
-        """Process successful retrieval results."""
+    def _process_results(self, docs: List[Document], start_time: float):
+        """Process successful retrieval results without domain tracking."""
         response_time = time.time() - start_time
         
-        # Count domains in retrieved docs
-        doc_domains = set()
-        if self.domain_manager:
-            for doc in docs:
-                doc_domain = doc.metadata.get('domain', 'unknown')
-                doc_domains.add(doc_domain)
-        
         # Log retrieval success
-        logger.rag_retrieval(len(docs), list(doc_domains))
+        logger.rag_retrieval(len(docs), [])
         
         # Record performance stats
         if self.stats_collector:
@@ -338,7 +295,6 @@ class OptimizedContextualRAGSystem:
             "metadata": {
                 "total_chunks": len(docs),
                 "response_time": response_time,
-                "domains_searched": list(doc_domains) if doc_domains else active_domains,
                 "query_type": "rag"
             }
         }
@@ -385,7 +341,7 @@ class OptimizedContextualRAGSystem:
     
     # System management
     def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive system statistics."""
+        """Get comprehensive system statistics without domain tracking."""
         stats = {
             'query_performance': self.stats_collector.get_query_stats(),
         }
@@ -397,33 +353,11 @@ class OptimizedContextualRAGSystem:
         resilience_stats = resilience_manager.get_health_summary()
         stats.update(resilience_stats)
         
-        # Add domain status
-        if self.domain_manager:
-            stats['domain_config'] = self.domain_manager.get_domain_status()
-        else:
-            stats['domain_config'] = {'status': 'disabled'}
-        
         return stats
     
     def get_domain_status(self) -> Dict[str, Any]:
-        """Get domain manager status."""
-        if self.domain_manager:
-            return self.domain_manager.get_domain_status()
+        """Get empty domain status - no domain restrictions."""
         return {"active_domains": [], "available_domains": []}
-    
-    def enable_domain(self, domain: str) -> bool:
-        """Enable a domain."""
-        if self.domain_manager:
-            result = self.domain_manager.activate_domains([domain])
-            return len(result.get("activated", [])) > 0
-        return False
-    
-    def disable_domain(self, domain: str) -> bool:
-        """Disable a domain."""
-        if self.domain_manager:
-            result = self.domain_manager.deactivate_domains([domain])
-            return len(result.get("deactivated", [])) > 0
-        return False
     
     def get_collection_info(self) -> Dict[str, Any]:
         """Get collection information."""
@@ -455,5 +389,4 @@ class OptimizedContextualRAGSystem:
     
     def __str__(self) -> str:
         """String representation."""
-        domains = self.domain_manager.get_active_domains() if self.domain_manager else []
-        return f"OptimizedContextualRAGSystem(domains={domains})" 
+        return f"OptimizedContextualRAGSystem(chroma_path={self.chroma_path}, collection_name={self.collection_name})" 

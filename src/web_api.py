@@ -172,8 +172,6 @@ class ChatResponse(BaseModel):
 
 class SystemStatus(BaseModel):
     """System status information"""
-    active_domains: List[str]
-    available_domains: List[str]
     total_documents: int
     cache_size: int
     memory_enabled: Dict[str, bool]
@@ -185,7 +183,6 @@ class SessionInfo(BaseModel):
     message_count: int
     created_at: datetime
     last_activity: datetime
-    domains: List[str]
 
 class CommandRequest(BaseModel):
     """System command request"""
@@ -227,17 +224,7 @@ class UserSessionsResponse(BaseModel):
     user_id: str
     timestamp: datetime
 
-class DomainStatusResponse(BaseModel):
-    """Domain status response model"""
-    active_domains: List[str]
-    available_domains: List[str]
-
-class DomainToggleResponse(BaseModel):
-    """Domain toggle response model"""
-    success: bool
-    message: str
-    domain: str
-    enabled: bool
+# Domain-related models removed - no longer needed
 
 
 
@@ -283,7 +270,6 @@ class WebhookResponse(BaseModel):
 class UserPreferencesRequest(BaseModel):
     """Request model for updating user preferences"""
     memory_preferences: Optional[Dict[str, Any]] = None
-    active_domains: Optional[List[str]] = None
     session_settings: Optional[Dict[str, Any]] = None
 
 class VerifySessionResponse(BaseModel):
@@ -461,11 +447,12 @@ def get_or_create_session(session_id: Optional[str] = None, user: Optional[Auth0
         }
 
 def update_session_activity(session_id: str):
-    """Update session last activity timestamp using UnifiedSessionManager"""
-    _, session_manager = get_graph_and_session_manager()
-    session_manager.current_thread_id = session_id
-    active_domains = rag_system.get_domain_status().get("active_domains", [])
-    session_manager.update_activity(active_domains)
+    """Update session activity timestamp."""
+    try:
+        _, session_manager = get_graph_and_session_manager()
+        session_manager.update_activity([])  # No domain tracking
+    except Exception as e:
+        web_logger.error(f"Failed to update session activity: {e}")
 
 # Root route is now handled by the catch-all static file handler at the end
 
@@ -514,24 +501,46 @@ async def manifest_json():
 
 @app.get("/api")
 async def api_info():
-    """API information endpoint"""
-    return {
-        "message": "Crowdfunding Due Diligence API",
-        "version": "2.0.0",
-        "status": "active",
-        "docs": "/docs",
-        "redoc": "/redoc"
-    }
+    """Get API information and status"""
+    try:
+        stats = rag_system.get_stats()
+        
+        return {
+            "name": "Crowd Due Dill API",
+            "version": "1.0.0",
+            "status": "active",
+            "endpoints": {
+                "chat": "/chat",
+                "status": "/status",
+                "sessions": "/sessions"
+            },
+            "system": {
+                "total_documents": stats.get("vectorstore_docs", 0),
+                "cache_enabled": False
+            }
+        }
+    except Exception as e:
+        web_logger.error(f"API info error: {e}")
+        return {"error": "Failed to retrieve API information"}
 
 @app.get("/chat")
 async def chat_info():
-    """Information about chat endpoint usage"""
-    return {
-        "message": "Chat endpoint requires POST method",
-        "usage": "POST /chat with JSON body: {'message': 'your message', 'session_id': 'optional'}",
-        "example": "curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{\"message\": \"Hello!\"}'",
-        "docs": "/docs"
-    }
+    """Get chat system information"""
+    try:
+        stats = rag_system.get_stats()
+        
+        return {
+            "message": "Chat endpoint active",
+            "method": "POST",
+            "system": {
+                "total_documents": stats.get("vectorstore_docs", 0),
+                "cache_enabled": False,
+                "memory_enabled": True
+            }
+        }
+    except Exception as e:
+        web_logger.error(f"Chat info error: {e}")
+        return {"error": "Failed to retrieve chat information"}
 
 @app.get("/health")
 async def health_check():
@@ -673,9 +682,6 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                 
                 # Update session activity for persistent sessions only
                 update_session_activity(session_id)
-                active_domains = rag_system.get_domain_status().get("active_domains", [])
-                _, session_manager = get_graph_and_session_manager()
-                session_manager.update_activity(active_domains)
             
             # Extract response information
             if current_state.get("messages") and len(current_state["messages"]) > 0:
@@ -725,25 +731,22 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 async def get_system_status():
     """Get current system status"""
     try:
-        # Get system status (domains, documents, cache)
-        system_status = {
-            "active_domains": list(rag_system.get_domain_status().get("active_domains", [])),
-            "available_domains": list(rag_system.get_domain_status().get("available_domains", [])),
-            "total_documents": rag_system.get_domain_status().get("total_documents", 0)
+        # Get system statistics
+        stats = rag_system.get_stats()
+        
+        # Get memory status
+        memory_status = {
+            "short_term_enabled": True,  # Default values since no session context
+            "medium_term_enabled": True
         }
         
-        # Get memory settings
-        memory_settings = memory_manager.get_memory_status()
-        
         return SystemStatus(
-            active_domains=system_status["active_domains"],
-            available_domains=system_status["available_domains"],
-            total_documents=system_status["total_documents"],
+            total_documents=stats.get("vectorstore_docs", 0),
             cache_size=0,  # Q&A cache disabled
-            memory_enabled=memory_settings
+            memory_enabled=memory_status
         )
     except Exception as e:
-        web_logger.error(f"Status retrieval error: {e}")
+        web_logger.error(f"System status error: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving system status")
 
 @app.get("/sessions", response_model=List[SessionInfo])
@@ -915,8 +918,7 @@ async def list_archived_sessions():
                 title=session.get("title"),
                 message_count=session["message_count"],
                 created_at=created_at,
-                last_activity=last_activity,
-                domains=session.get("domains_used", [])
+                last_activity=last_activity
             ))
         return sessions
     except Exception as e:
@@ -1022,47 +1024,7 @@ async def execute_command(request: CommandRequest):
         web_logger.error(f"Command execution error: {e}")
         raise HTTPException(status_code=500, detail=f"Error executing command: {str(e)}")
 
-@app.get("/domains", response_model=DomainStatusResponse)
-async def get_domains():
-    """Get available and active domains"""
-    try:
-        domain_status = rag_system.get_domain_status()
-        return DomainStatusResponse(
-            active_domains=domain_status.get("active_domains", []),
-            available_domains=domain_status.get("available_domains", [])
-        )
-    except Exception as e:
-        web_logger.error(f"Domain retrieval error: {e}")
-        raise HTTPException(status_code=500, detail="Error retrieving domains")
-
-@app.post("/domains/{domain_name}/toggle", response_model=DomainToggleResponse)
-async def toggle_domain(domain_name: str, enable: bool = True):
-    """Enable or disable a knowledge domain"""
-    try:
-        if enable:
-            result = domain_manager.enable_domain(domain_name)
-        else:
-            result = domain_manager.disable_domain(domain_name)
-        
-        if result:
-            action = "enabled" if enable else "disabled"
-            return DomainToggleResponse(
-                success=True,
-                message=f"Domain '{domain_name}' {action}",
-                domain=domain_name,
-                enabled=enable
-            )
-        else:
-            return DomainToggleResponse(
-                success=False,
-                message=f"Failed to modify domain '{domain_name}'",
-                domain=domain_name,
-                enabled=not enable
-            )
-            
-    except Exception as e:
-        web_logger.error(f"Domain toggle error: {e}")
-        raise HTTPException(status_code=500, detail=f"Error toggling domain: {str(e)}")
+# Domain endpoints removed - no longer needed
 
 # Removed lunar endpoint - not relevant for crowdfunding due diligence
 
@@ -1094,7 +1056,6 @@ async def get_current_user_info(user: RequiredUser):
             "given_name": user.given_name,
             "family_name": user.family_name,
             "memory_preferences": user.memory_preferences,
-            "active_domains": user.active_domains,
             "session_settings": user.session_settings,
         },
         timestamp=datetime.now()
@@ -1172,7 +1133,6 @@ async def update_user_preferences(user: RequiredUser, preferences: UserPreferenc
     try:
         success = await user_sync_service.update_user_metadata(user, {
             "memory_preferences": preferences.memory_preferences or {},
-            "active_domains": preferences.active_domains or [],
             "session_settings": preferences.session_settings or {}
         })
         
@@ -1217,8 +1177,7 @@ async def get_user_sessions(user: RequiredUser):
                     "title": session.get("title"),
                     "message_count": session["message_count"],
                     "created_at": created_at.isoformat(),
-                    "last_activity": last_activity.isoformat(),
-                    "domains": session.get("domains_used", [])
+                    "last_activity": last_activity.isoformat()
                 })
         
         return UserSessionsResponse(

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-Unit tests for Simplified DomainManager component.
+Unit tests for Minimal Domain Manager Stub.
 
-Tests single-domain functionality:
-- Always active eu_crowdfunding domain
-- API compatibility with legacy multi-domain interface
-- Status reporting
+Tests that the domain manager stub maintains API compatibility
+while eliminating all domain complexity and restrictions.
 """
 
 import unittest
@@ -19,114 +17,73 @@ sys.path.insert(0, str(src_dir))
 from src.core.domain_manager import DomainManager
 
 
-class TestSimplifiedDomainManager(unittest.TestCase):
-    """Test suite for simplified single-domain DomainManager class."""
+class TestMinimalDomainManagerStub(unittest.TestCase):
+    """Test suite for minimal domain manager stub."""
     
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.dm = DomainManager()
     
-    def test_default_initialization(self):
-        """Test default initialization with eu_crowdfunding domain."""
-        self.assertEqual(list(self.dm.active_domains), ["eu_crowdfunding"])
-        self.assertEqual(len(self.dm.active_domains), 1)
-        self.assertTrue(self.dm.is_domain_active("eu_crowdfunding"))
+    def test_initialization(self):
+        """Test initialization creates minimal stub."""
+        # Should not raise any errors
+        self.assertIsInstance(self.dm, DomainManager)
     
-    def test_activate_valid_domain(self):
-        """Test activating the valid eu_crowdfunding domain."""
-        result = self.dm.activate_domains(["eu_crowdfunding"])
+    def test_get_domain_status_empty(self):
+        """Test that domain status returns empty values."""
+        status = self.dm.get_domain_status()
         
-        self.assertEqual(result["activated"], ["eu_crowdfunding"])
-        self.assertEqual(result["already_active"], [])
-        self.assertEqual(result["invalid"], [])
-        self.assertIn("eu_crowdfunding", result["active_domains"])
+        self.assertEqual(status["active_domains"], [])
+        self.assertEqual(status["available_domains"], [])
+        self.assertEqual(status["inactive_domains"], [])
     
-    def test_activate_invalid_domain(self):
-        """Test activating an invalid domain."""
-        result = self.dm.activate_domains(["invalid_domain"])
-        
-        self.assertEqual(result["activated"], ["eu_crowdfunding"])  # Always returns active domain
-        self.assertEqual(result["already_active"], [])
-        self.assertEqual(result["invalid"], ["invalid_domain"])
-        self.assertEqual(result["active_domains"], ["eu_crowdfunding"])
-    
-    def test_deactivate_domain_always_fails(self):
-        """Test that deactivating any domain always fails (eu_crowdfunding stays active)."""
-        result = self.dm.deactivate_domains(["eu_crowdfunding"])
-        
-        self.assertEqual(result["deactivated"], [])
-        self.assertEqual(result["not_active"], ["eu_crowdfunding"])
-        self.assertEqual(result["active_domains"], ["eu_crowdfunding"])
-    
-    def test_is_domain_active(self):
-        """Test domain activity checking."""
-        self.assertTrue(self.dm.is_domain_active("eu_crowdfunding"))
-        self.assertFalse(self.dm.is_domain_active("securities_law"))
-        self.assertFalse(self.dm.is_domain_active("invalid_domain"))
-    
-    def test_get_active_domains(self):
-        """Test getting active domains."""
+    def test_get_active_domains_empty(self):
+        """Test that active domains returns empty list."""
         active = self.dm.get_active_domains()
-        self.assertEqual(active, ["eu_crowdfunding"])
+        self.assertEqual(active, [])
     
-    def test_get_available_domains(self):
-        """Test getting available domains."""
+    def test_get_available_domains_empty(self):
+        """Test that available domains returns empty list."""
         available = self.dm.get_available_domains()
-        self.assertEqual(available, ["eu_crowdfunding"])
-        self.assertEqual(set(available), DomainManager.AVAILABLE_DOMAINS)
+        self.assertEqual(available, [])
     
-    def test_get_inactive_domains(self):
-        """Test getting inactive domains (always empty)."""
+    def test_get_inactive_domains_empty(self):
+        """Test that inactive domains returns empty list."""
         inactive = self.dm.get_inactive_domains()
         self.assertEqual(inactive, [])
     
-    def test_get_domain_status_structure(self):
-        """Test that get_domain_status returns correct structure."""
-        status = self.dm.get_domain_status()
-        required_keys = {"active_domains", "available_domains", "max_active_domains", "inactive_domains"}
-        self.assertTrue(all(key in status for key in required_keys))
+    def test_is_domain_active_always_true(self):
+        """Test that any domain is considered active (no restrictions)."""
+        self.assertTrue(self.dm.is_domain_active("eu_crowdfunding"))
+        self.assertTrue(self.dm.is_domain_active("securities_law"))
+        self.assertTrue(self.dm.is_domain_active("any_domain"))
+        self.assertTrue(self.dm.is_domain_active(""))
     
-    def test_get_domain_status_content(self):
-        """Test that get_domain_status returns correct content."""
-        status = self.dm.get_domain_status()
+    def test_activate_domains_noop(self):
+        """Test that domain activation is a no-op."""
+        result = self.dm.activate_domains(["eu_crowdfunding", "securities_law"])
         
-        self.assertEqual(status["active_domains"], ["eu_crowdfunding"])
-        self.assertEqual(set(status["available_domains"]), DomainManager.AVAILABLE_DOMAINS)
-        self.assertEqual(status["max_active_domains"], 1)
-        self.assertEqual(status["inactive_domains"], [])
+        self.assertEqual(result["activated"], [])
+        self.assertEqual(result["already_active"], [])
+        self.assertEqual(result["invalid"], [])
     
-    def test_reset_to_defaults(self):
-        """Test resetting to default configuration."""
-        # Even after any operations, should always return to eu_crowdfunding
+    def test_deactivate_domains_noop(self):
+        """Test that domain deactivation is a no-op."""
+        result = self.dm.deactivate_domains(["eu_crowdfunding"])
+        
+        self.assertEqual(result["deactivated"], [])
+        self.assertEqual(result["not_active"], [])
+    
+    def test_reset_to_defaults_returns_empty_status(self):
+        """Test that reset returns empty domain status."""
         result = self.dm.reset_to_defaults()
         
-        self.assertEqual(result["active_domains"], ["eu_crowdfunding"])
-        self.assertEqual(result["available_domains"], ["eu_crowdfunding"])
+        self.assertEqual(result["active_domains"], [])
+        self.assertEqual(result["available_domains"], [])
         self.assertEqual(result["inactive_domains"], [])
     
-    def test_string_representation(self):
-        """Test string representation."""
-        str_repr = str(self.dm)
-        self.assertIn("eu_crowdfunding", str_repr)
-        self.assertIn("DomainManager", str_repr)
-    
-    def test_domain_constants(self):
-        """Test that domain constants are correctly defined."""
-        self.assertIsInstance(DomainManager.AVAILABLE_DOMAINS, set)
-        self.assertEqual(DomainManager.AVAILABLE_DOMAINS, {"eu_crowdfunding"})
-        self.assertEqual(DomainManager.DEFAULT_DOMAIN, "eu_crowdfunding")
-    
-    def test_multiple_domain_requests(self):
-        """Test activating multiple domains (only eu_crowdfunding should be valid)."""
-        result = self.dm.activate_domains(["eu_crowdfunding", "securities_law", "compliance"])
-        
-        self.assertEqual(result["activated"], ["eu_crowdfunding"])
-        self.assertEqual(result["already_active"], [])
-        self.assertEqual(set(result["invalid"]), {"securities_law", "compliance"})
-        self.assertEqual(result["active_domains"], ["eu_crowdfunding"])
-    
     def test_api_compatibility(self):
-        """Test that the API maintains compatibility with legacy multi-domain interface."""
+        """Test that all expected API methods exist and work."""
         # These methods should exist and work without errors
         self.assertTrue(hasattr(self.dm, "activate_domains"))
         self.assertTrue(hasattr(self.dm, "deactivate_domains"))
@@ -145,6 +102,22 @@ class TestSimplifiedDomainManager(unittest.TestCase):
         self.assertIsInstance(self.dm.get_available_domains(), list)
         self.assertIsInstance(self.dm.get_inactive_domains(), list)
         self.assertIsInstance(self.dm.is_domain_active("test"), bool)
+    
+    def test_no_domain_restrictions(self):
+        """Test that the stub eliminates all domain restrictions."""
+        # Any domain should be considered active
+        self.assertTrue(self.dm.is_domain_active("nonexistent_domain"))
+        
+        # Domain operations should be no-ops
+        result = self.dm.activate_domains(["anything"])
+        self.assertEqual(result["activated"], [])
+        
+        result = self.dm.deactivate_domains(["anything"])
+        self.assertEqual(result["deactivated"], [])
+        
+        # Status should always be empty
+        status = self.dm.get_domain_status()
+        self.assertFalse(any(status.values()))  # All lists should be empty
 
 
 if __name__ == '__main__':

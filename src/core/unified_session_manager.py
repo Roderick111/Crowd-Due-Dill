@@ -35,25 +35,21 @@ class UnifiedSessionManager:
         """Create a new session with clean state."""
         thread_id = str(uuid.uuid4())
         
-        # Initialize state with default memory settings and metadata
-        initial_state = {
-            "messages": [],
+        # Create new session metadata
+        metadata = {
+            "created_at": datetime.now().isoformat(),
+            "message_count": 0,
+            "last_activity": datetime.now().isoformat(),
             "memory_settings": {
                 "short_term_enabled": True,
                 "medium_term_enabled": True
-            },
-            "session_metadata": {
-                "created_at": datetime.now().isoformat(),
-                "last_activity": datetime.now().isoformat(),
-                "message_count": 0,
-                "domains_used": []
             }
         }
         
         config = {"configurable": {"thread_id": thread_id}}
         
         # Initialize the session by updating state
-        self.graph.update_state(config, initial_state)
+        self.graph.update_state(config, metadata)
         
         self.current_thread_id = thread_id
         logger.debug(f"Created session: {thread_id[:8]}...")
@@ -61,7 +57,7 @@ class UnifiedSessionManager:
         return {
             "thread_id": thread_id,
             "config": config,
-            "state": initial_state
+            "state": metadata
         }
     
     def load_session(self, thread_id: str) -> Optional[Dict[str, Any]]:
@@ -107,35 +103,28 @@ class UnifiedSessionManager:
             return False
     
     def update_activity(self, domains_used: List[str] = None) -> bool:
-        """Update current session activity and metadata."""
+        """Update session activity timestamp - domain tracking removed."""
         if not self.current_thread_id:
             return False
         
-        config = {"configurable": {"thread_id": self.current_thread_id}}
-        
         try:
-            # Get current state
+            config = {"configurable": {"thread_id": self.current_thread_id}}
             current_state = self.graph.get_state(config)
-            if not current_state or not current_state.values:
-                return False
             
-            # Update metadata
-            metadata = current_state.values.get("session_metadata", {})
-            metadata["last_activity"] = datetime.now().isoformat()
-            metadata["message_count"] = metadata.get("message_count", 0) + 1
-            
-            if domains_used:
-                current_domains = set(metadata.get("domains_used", []))
-                current_domains.update(domains_used)
-                metadata["domains_used"] = list(current_domains)
-            
-            # Update state
-            self.graph.update_state(config, {"session_metadata": metadata})
-            return True
-            
+            if current_state and current_state.values:
+                # Update activity timestamp and message count
+                metadata = current_state.values.get("session_metadata", {})
+                metadata["last_activity"] = datetime.now().isoformat()
+                metadata["message_count"] = metadata.get("message_count", 0) + 1
+                
+                # Update state
+                self.graph.update_state(config, {"session_metadata": metadata})
+                return True
+                
         except Exception as e:
             logger.error(f"Failed to update session activity: {e}")
-            return False
+        
+        return False
     
     def save_memory_settings(self, memory_manager) -> bool:
         """Save memory settings to current session state."""
@@ -219,11 +208,10 @@ class UnifiedSessionManager:
                 if thread_id not in sessions_dict:
                     sessions_dict[thread_id] = {
                         "thread_id": thread_id,
-                        "title": metadata.get("title"),
                         "created_at": metadata.get("created_at", "unknown"),
                         "last_activity": last_activity,
                         "message_count": message_count,
-                        "domains_used": metadata.get("domains_used", []),
+                        "title": metadata.get("title"),
                         "archived": metadata.get("archived", False)
                     }
                 else:
@@ -232,11 +220,10 @@ class UnifiedSessionManager:
                     if last_activity != "unknown" and (existing_activity == "unknown" or last_activity > existing_activity):
                         sessions_dict[thread_id] = {
                             "thread_id": thread_id,
-                            "title": metadata.get("title"),
                             "created_at": metadata.get("created_at", "unknown"),
                             "last_activity": last_activity,
                             "message_count": message_count,
-                            "domains_used": metadata.get("domains_used", []),
+                            "title": metadata.get("title"),
                             "archived": metadata.get("archived", False)
                         }
             
@@ -285,7 +272,8 @@ class UnifiedSessionManager:
                     "created_at": metadata.get("created_at", "unknown"),
                     "last_activity": metadata.get("last_activity", "unknown"),
                     "message_count": message_count,
-                    "domains_used": metadata.get("domains_used", []),
+                    "title": metadata.get("title"),
+                    "archived": metadata.get("archived", False),
                     "memory_settings": memory_settings
                 }
             return None
@@ -401,11 +389,10 @@ class UnifiedSessionManager:
                 if thread_id not in sessions_dict:
                     sessions_dict[thread_id] = {
                         "thread_id": thread_id,
-                        "title": metadata.get("title"),
                         "created_at": metadata.get("created_at", "unknown"),
                         "last_activity": last_activity,
                         "message_count": message_count,
-                        "domains_used": metadata.get("domains_used", []),
+                        "title": metadata.get("title"),
                         "archived": metadata.get("archived", False),
                         "archived_at": metadata.get("archived_at", "unknown")
                     }
@@ -415,11 +402,10 @@ class UnifiedSessionManager:
                     if last_activity != "unknown" and (existing_activity == "unknown" or last_activity > existing_activity):
                         sessions_dict[thread_id] = {
                             "thread_id": thread_id,
-                            "title": metadata.get("title"),
                             "created_at": metadata.get("created_at", "unknown"),
                             "last_activity": last_activity,
                             "message_count": message_count,
-                            "domains_used": metadata.get("domains_used", []),
+                            "title": metadata.get("title"),
                             "archived": metadata.get("archived", False),
                             "archived_at": metadata.get("archived_at", "unknown")
                         }

@@ -257,8 +257,10 @@ class ChromaDBQueryHelper:
         """Build document-level filters"""
         filters = []
         
-        if kwargs.get("domain"):
-            filters.append({"document.domain": kwargs["domain"]})
+        # Remove domain filtering since it's no longer used
+        if "domain" in kwargs:
+            # Domain filtering removed - ignore domain parameter
+            pass
         if kwargs.get("doc_type"):
             filters.append({"document.doc_type": kwargs["doc_type"]})
         if kwargs.get("language"):

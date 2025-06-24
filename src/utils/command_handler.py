@@ -88,16 +88,8 @@ class CommandHandler:
     
     def _handle_prefix_commands(self, user_input: str, state: dict) -> bool:
         """Handle commands that start with specific prefixes."""
-        # Domain commands
-        if user_input.startswith("domains enable "):
-            domain = user_input.replace("domains enable ", "").strip()
-            return self._handle_domain_enable(domain)
-        elif user_input.startswith("domains disable "):
-            domain = user_input.replace("domains disable ", "").strip()
-            return self._handle_domain_disable(domain)
-        
         # Memory commands
-        elif user_input.startswith("memory enable "):
+        if user_input.startswith("memory enable "):
             memory_type = user_input.replace("memory enable ", "").strip()
             return self._handle_memory_enable(memory_type, state)
         elif user_input.startswith("memory disable "):
@@ -144,11 +136,6 @@ class CommandHandler:
         self.register_command("cache stats clear", self._cmd_cache_stats_clear, "Clear cache statistics")
         self.register_command("qa cache clear", self._cmd_qa_cache_clear, "Clear Q&A cache")
         
-        # Domain Commands
-        self.register_command("domains", self._cmd_domain_status, "Show domain status")
-        
-
-        
         # Debug Commands
         self.register_command("debug on", self._cmd_debug_on, "Enable debug mode")
         self.register_command("debug off", self._cmd_debug_off, "Disable debug mode")
@@ -185,15 +172,6 @@ class CommandHandler:
         """Clear Q&A cache."""
         self.qa_cache.clear_cache()
     
-    def _cmd_domain_status(self, state: dict):
-        """Show domain status."""
-        status = self.rag_system.get_domain_status()
-        active = ', '.join(status['active_domains']) if status['active_domains'] else 'None'
-        print(f"🎯 Active: {active}")
-        print(f"Available: {', '.join(status['available_domains'])}")
-    
-
-    
     def _cmd_debug_on(self, state: dict):
         """Enable debug mode."""
         if self.set_debug_mode:
@@ -207,16 +185,6 @@ class CommandHandler:
     # ===================
     # Prefix Command Handlers
     # ===================
-    
-    def _handle_domain_enable(self, domain: str) -> bool:
-        """Domain switching disabled - only eu_crowdfunding is supported."""
-        logger.command_executed(f"Domain switching disabled - eu_crowdfunding is always active")
-        return True
-    
-    def _handle_domain_disable(self, domain: str) -> bool:
-        """Domain switching disabled - only eu_crowdfunding is supported."""
-        logger.command_executed(f"Domain switching disabled - eu_crowdfunding cannot be disabled")
-        return True
     
     def _handle_memory_enable(self, memory_type: str, state: dict) -> bool:
         """Enable memory type (short/medium)."""
@@ -257,8 +225,7 @@ class CommandHandler:
                 session_id = session["thread_id"][:8]
                 created = session["created_at"][:19].replace('T', ' ')
                 msg_count = session["message_count"]
-                domains = ', '.join(session["domains_used"]) or 'None'
-                print(f"  {i+1}. {session_id}... ({created}) - {msg_count} msgs, domains: {domains}")
+                print(f"  {i+1}. {session_id}... ({created}) - {msg_count} msgs")
         else:
             print("📋 No sessions found")
         return True
@@ -271,7 +238,6 @@ class CommandHandler:
             print(f"🆔 Current Session: {current_session['thread_id'][:8]}...")
             print(f"📅 Created: {current_session['created_at'][:19].replace('T', ' ')}")
             print(f"💬 Messages: {current_session['message_count']}")
-            print(f"🎯 Domains used: {', '.join(current_session['domains_used']) or 'None'}")
             print(f"🧠 Memory: ST:{memory_settings.get('short_term_enabled', True)}, MT:{memory_settings.get('medium_term_enabled', True)}")
         else:
             print("🆔 No active session")
