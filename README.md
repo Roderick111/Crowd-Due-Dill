@@ -38,6 +38,12 @@ A sophisticated AI-powered legal compliance assistant specializing in crowdfundi
 - **Clean Command System**: Organized command handling with registry pattern
 - **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy
 
+### 🕷️ **Web Crawler** (Optional Component)
+- **Content Extraction**: Intelligent web crawling with LLM-readable markdown conversion
+- **Multiple Strategies**: Single page, batch crawling, sitemap parsing, and query-focused extraction
+- **Content Filtering**: PruningContentFilter and BM25 filtering for high-quality content
+- **Database Integration**: Direct addition of crawled content to the knowledge base
+
 ## 📁 Project Structure
 
 ```
@@ -86,7 +92,8 @@ crowd-due-dill/
 │   └── config/                       # Frontend configuration
 ├── config/                           # Configuration
 ├── tools/                            # Management tools
-│   └── document_manager.py           # Document management utility
+│   ├── document_manager.py           # Document management utility
+│   └── web_crawler.py               # Web crawler for content extraction (optional)
 ├── pyproject.toml                   # Project configuration
 ├── uv.lock                          # Dependency lock file
 └── run.py                           # Application entry point
@@ -390,6 +397,47 @@ python tools/document_manager.py
 # 4. Remove documents
 ```
 
+## 🕷️ Web Crawler (Optional Component)
+
+The web crawler allows you to extract content from websites and add it to the knowledge base in LLM-readable markdown format.
+
+### Installation
+```bash
+# Install crawler dependencies
+pip install -r config/requirements_crawler.txt
+playwright install
+
+# Test installation
+python tools/test_web_crawler.py
+```
+
+### Basic Usage
+```bash
+# Crawl a single page
+python tools/web_crawler.py https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32020R1503
+
+# Crawl multiple pages
+python tools/web_crawler.py --batch url1 url2 url3
+
+# Query-focused crawling (extract GDPR-related content)
+python tools/web_crawler.py https://example.com --query "GDPR data protection privacy"
+
+# Add crawled content to database
+python tools/web_crawler.py https://example.com --add-to-db --domain "regulatory_docs"
+
+# Get help
+python tools/web_crawler.py --help
+```
+
+### Advanced Features
+- **Content Filtering**: Removes ads, navigation, and low-value content
+- **Query-Focused Extraction**: BM25 filtering for topic-relevant content
+- **Sitemap Support**: Crawl entire websites from sitemap.xml
+- **Batch Processing**: Parallel crawling with configurable concurrency
+- **Database Integration**: Direct addition to Crowd Due Dill knowledge base
+
+For detailed usage examples and API documentation, see [`tools/README_WebCrawler.md`](tools/README_WebCrawler.md).
+
 ### Document Types
 - **Regulatory Documents** (`docs/content/`): Legal texts, regulations, directives
 - **Q&A Documents**: Regulatory question-answer pairs for fast lookup
@@ -543,19 +591,4 @@ This system is designed to assist with regulatory compliance research and analys
 
 ---
 
-*Built with LangChain, ChromaDB, LangGraph, OpenAI, Google Gemini, Auth0, Stripe, and SQLite - Bridging regulatory expertise with modern AI for intelligent legal compliance assistance.* 
-
-## 🎯 **Focus Areas**
-
-**Primary Domain: EU Crowdfunding Regulation**
-- **EU Crowdfunding Regulation 2020/1503**: Complete regulatory framework coverage
-- **Authorization Requirements**: Licensing, competent authorities, operational conditions
-- **Platform Obligations**: Due diligence, disclosure requirements, risk management
-- **Investor Protection**: Information disclosure, risk warnings, investment limits
-- **Cross-Border Services**: Passporting rights, regulatory harmonization, ESMA guidelines
-
-### 🛡️ **Safety & Intelligence**
-- **Context-Aware Responses**: Maintains legal consultation continuity
-- **Performance Analytics**: Comprehensive statistics and monitoring
-- **Clean Command System**: Organized command handling with registry pattern
-- **Single Domain Focus**: Specialized in EU crowdfunding regulations for optimal accuracy # Testing deployment fix
+*Built with LangChain, ChromaDB, LangGraph, OpenAI, Google Gemini, Auth0, Stripe, and SQLite - Bridging regulatory expertise with modern AI for intelligent legal compliance assistance.*

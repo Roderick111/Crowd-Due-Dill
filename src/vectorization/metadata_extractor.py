@@ -102,7 +102,7 @@ class ExtractedMetadata(BaseModel):
 @dataclass
 class ExtractionConfig:
     """Configuration for metadata extraction operations."""
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-1.5-flash-8b"
     temperature: float = 0.1
     timeout: float = 30.0
     retry_attempts: int = 3

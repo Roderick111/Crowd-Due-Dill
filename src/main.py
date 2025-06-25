@@ -42,7 +42,7 @@ from utils.command_handler import command_handler
 load_dotenv()
 
 # Initialize LLM
-llm = init_chat_model("gemini-2.0-flash-001", model_provider="google_genai")
+llm = init_chat_model("gemini-1.5-flash-8b", model_provider="google_genai")
 
 # Initialize system components
 # Simplified system without domain complexity

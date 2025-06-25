@@ -30,6 +30,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 
+# Cross-Encoder reranking imports
+try:
+    from sentence_transformers import CrossEncoder
+    RERANKING_AVAILABLE = True
+except ImportError:
+    CrossEncoder = None
+    RERANKING_AVAILABLE = False
+    print("⚠️  sentence-transformers not available. Reranking disabled. Install with: pip install sentence-transformers")
+
 # Add src to path for local imports
 current_dir = Path(__file__).parent
 project_root = current_dir.parent
@@ -64,6 +73,11 @@ class ProcessingConfig:
     extraction_timeout: float = 25.0
     extraction_retry_attempts: int = 2
     extraction_batch_size: int = 50
+    # Cross-Encoder Reranking Configuration
+    enable_reranking: bool = True  # Active by default for better search quality
+    reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranking_top_k: int = 20  # Retrieve more for reranking
+    reranking_final_k: int = 5  # Final result count
     
     def __post_init__(self):
         if self.max_workers is None:
@@ -184,6 +198,11 @@ class SimpleDocumentManager:
             )
             self.metadata_extractor = LegalMetadataExtractor(extraction_config)
         
+        # Initialize Cross-Encoder reranking if enabled
+        self.cross_encoder = None
+        if self.config.enable_reranking and RERANKING_AVAILABLE:
+            self._init_cross_encoder()
+        
         self._load_registry()
         
     def _load_registry(self):
@@ -244,6 +263,65 @@ class SimpleDocumentManager:
         if self.rag_system is None:
             self.rag_system = OptimizedContextualRAGSystem()
     
+    def _init_cross_encoder(self):
+        """Initialize Cross-Encoder model for reranking"""
+        try:
+            print(f"🧠 Loading Cross-Encoder model: {self.config.reranking_model}")
+            self.cross_encoder = CrossEncoder(self.config.reranking_model, max_length=512)
+            print("✅ Cross-Encoder model loaded successfully")
+        except Exception as e:
+            print(f"❌ Failed to load Cross-Encoder model: {e}")
+            print("🔄 Disabling reranking for this session")
+            self.cross_encoder = None
+    
+    def _rerank_results(self, query: str, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Rerank search results using Cross-Encoder for better relevance.
+        
+        Args:
+            query: The search query
+            results: List of result dictionaries with 'page_content' or 'content'
+            
+        Returns:
+            List of reranked results with added 'rerank_score' field
+        """
+        if not self.cross_encoder or not results:
+            return results
+        
+        try:
+            # Extract content from results
+            contents = []
+            for result in results:
+                content = result.get('page_content') or result.get('content', '')
+                if isinstance(content, str):
+                    contents.append(content)
+                else:
+                    contents.append(str(content))
+            
+            # Create query-document pairs for Cross-Encoder
+            pairs = [[query, content] for content in contents]
+            
+            # Get relevance scores
+            scores = self.cross_encoder.predict(pairs)
+            
+            # Add scores to results and sort by relevance
+            for i, result in enumerate(results):
+                if i < len(scores):
+                    result['rerank_score'] = float(scores[i])
+                else:
+                    result['rerank_score'] = 0.0
+            
+            # Sort by rerank score (descending)
+            reranked = sorted(results, key=lambda x: x.get('rerank_score', 0), reverse=True)
+            
+            print(f"🎯 Reranked {len(results)} results using Cross-Encoder")
+            return reranked
+            
+        except Exception as e:
+            print(f"⚠️  Reranking failed: {e}")
+            print("🔄 Returning original results")
+            return results
+    
     def _add_documents_to_vectorstore(self, documents: List[Document]) -> bool:
         """Add processed documents to vector database using optimized batch operations"""
         try:
@@ -264,35 +342,285 @@ class SimpleDocumentManager:
             print(f"❌ Error adding documents to vectorstore: {e}")
             return False
     
+    def _smart_chunk_legal_markdown(self, text: str, chunk_size: int = 4000) -> List[str]:
+        """
+        Structure-aware chunking optimized for legal documents.
+        
+        Implements hierarchical boundary detection with four-tier priority:
+        1. Legal section boundaries (CHAPTER, Article, Section)
+        2. Code/regulation blocks (```)
+        3. Paragraph boundaries (\n\n)
+        4. Sentence boundaries (. )
+        
+        Args:
+            text: Input text to chunk
+            chunk_size: Target chunk size in characters
+            
+        Returns:
+            List of structured chunks preserving legal document semantics
+        """
+        if not text or len(text) <= chunk_size:
+            return [text.strip()] if text.strip() else []
+        
+        chunks = []
+        start = 0
+        text_length = len(text)
+        
+        # 30% rule - minimum meaningful chunk size
+        min_chunk_size = int(chunk_size * 0.3)
+        
+        while start < text_length:
+            # Calculate target end position
+            end = min(start + chunk_size, text_length)
+            
+            # If we're at the end, take everything remaining
+            if end >= text_length:
+                final_chunk = text[start:].strip()
+                if final_chunk:
+                    chunks.append(final_chunk)
+                break
+            
+            # Extract current chunk for boundary analysis
+            current_chunk = text[start:end]
+            
+            # Priority 1: Legal structure boundaries (highest priority)
+            legal_boundaries = [
+                '\n# CHAPTER',     # Chapter headers
+                '\n## Article',    # Article headers  
+                '\n### Section',   # Section headers
+                '\n#### ',         # Sub-section headers
+                '\nCHAPTER ',      # Chapter without #
+                '\nArticle ',      # Article without #
+                '\nSection ',      # Section without #
+            ]
+            
+            best_legal_boundary = -1
+            for boundary in legal_boundaries:
+                boundary_pos = current_chunk.rfind(boundary)
+                if boundary_pos > min_chunk_size:
+                    best_legal_boundary = max(best_legal_boundary, boundary_pos)
+            
+            if best_legal_boundary != -1:
+                # Break at legal structure boundary
+                end = start + best_legal_boundary
+                chunk = text[start:end].strip()
+                if chunk:
+                    chunks.append(chunk)
+                start = end
+                continue
+            
+            # Priority 2: Code/regulation blocks (second priority)
+            code_block_end = current_chunk.rfind('```')
+            if code_block_end != -1 and code_block_end > min_chunk_size:
+                # Check if this is closing a code block or starting one
+                code_content = current_chunk[:code_block_end]
+                code_block_count = code_content.count('```')
+                
+                # If odd number, this is closing a block - good place to break
+                if code_block_count % 2 == 1:
+                    end = start + code_block_end + 3  # Include the closing ```
+                    chunk = text[start:end].strip()
+                    if chunk:
+                        chunks.append(chunk)
+                    start = end
+                    continue
+            
+            # Priority 3: Numbered paragraph boundaries (legal documents often use (1), (2), etc.)
+            numbered_para_patterns = [
+                '\n\n(',  # Numbered paragraphs like (1), (2)
+                '\n\n   (', # Indented numbered paragraphs
+            ]
+            
+            best_numbered_boundary = -1
+            for pattern in numbered_para_patterns:
+                boundary_pos = current_chunk.rfind(pattern)
+                if boundary_pos > min_chunk_size:
+                    best_numbered_boundary = max(best_numbered_boundary, boundary_pos)
+            
+            if best_numbered_boundary != -1:
+                end = start + best_numbered_boundary
+                chunk = text[start:end].strip()
+                if chunk:
+                    chunks.append(chunk)
+                start = end
+                continue
+            
+            # Priority 4: Regular paragraph boundaries (third priority)
+            paragraph_break = current_chunk.rfind('\n\n')
+            if paragraph_break != -1 and paragraph_break > min_chunk_size:
+                end = start + paragraph_break
+                chunk = text[start:end].strip()
+                if chunk:
+                    chunks.append(chunk)
+                start = end
+                continue
+            
+            # Priority 5: Sentence boundaries (fourth priority)
+            sentence_patterns = [
+                '. \n',    # Sentence end with newline
+                '.\n',     # Sentence end followed by newline
+                '. ',      # Sentence end with space
+            ]
+            
+            best_sentence_boundary = -1
+            for pattern in sentence_patterns:
+                boundary_pos = current_chunk.rfind(pattern)
+                if boundary_pos > min_chunk_size:
+                    best_sentence_boundary = max(best_sentence_boundary, boundary_pos + len(pattern) - 1)
+            
+            if best_sentence_boundary != -1:
+                end = start + best_sentence_boundary + 1
+                chunk = text[start:end].strip()
+                if chunk:
+                    chunks.append(chunk)
+                start = end
+                continue
+            
+            # Priority 6: Fallback to hard size limit
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+            start = end
+        
+        return chunks
+
     def _load_and_chunk_document(self, filepath: str) -> List[Document]:
-        """Load and chunk a single document"""
+        """Load and chunk a single document using structure-aware chunking"""
         loader = TextLoader(filepath, encoding='utf-8')
         documents = loader.load()
         
-        # Standard chunking for regulatory documents
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=4000,
-            chunk_overlap=1000,
-            length_function=len,
-        )
+        # Use structure-aware chunking for better legal document handling
+        all_chunks = []
         
-        chunks = text_splitter.split_documents(documents)
+        for doc in documents:
+            # Apply smart chunking to preserve legal document structure
+            smart_chunks = self._smart_chunk_legal_markdown(
+                text=doc.page_content,
+                chunk_size=4000  # Target size, actual chunks may vary based on structure
+            )
+            
+            # Convert string chunks back to Document objects
+            for i, chunk_text in enumerate(smart_chunks):
+                chunk_doc = Document(
+                    page_content=chunk_text,
+                    metadata={
+                        "source": filepath,
+                        "chunk_method": "structure_aware",
+                        "chunk_index": i,
+                        "total_chunks": len(smart_chunks)
+                    }
+                )
+                all_chunks.append(chunk_doc)
         
-        # Add source metadata to chunks
-        for chunk in chunks:
-            chunk.metadata["source"] = filepath
+        # Analyze chunking results
+        chunk_sizes = [len(chunk.page_content) for chunk in all_chunks]
+        avg_chunk_size = sum(chunk_sizes) / len(chunk_sizes) if chunk_sizes else 0
         
-        return chunks
+        # Count structural elements
+        structure_types = {}
+        chapter_chunks = 0
+        article_chunks = 0
+        
+        for chunk in all_chunks:
+            chunk_method = chunk.metadata.get("chunk_method", "unknown")
+            structure_types[chunk_method] = structure_types.get(chunk_method, 0) + 1
+            
+            # Analyze content for structure
+            content = chunk.page_content
+            if "# CHAPTER" in content or "CHAPTER " in content:
+                chapter_chunks += 1
+            if "## Article" in content or "Article " in content:
+                article_chunks += 1
+        
+        print(f"📄 Structure-aware chunking: {len(all_chunks)} chunks created")
+        print(f"📊 Chunk sizes: avg={avg_chunk_size:.0f}, range=[{min(chunk_sizes)}-{max(chunk_sizes)}]")
+        print(f"🏗️  Structure preserved: {chapter_chunks} chapters, {article_chunks} articles")
+        print(f"📈 Size distribution: {chunk_sizes[:5]}... (showing first 5)")
+        
+        return all_chunks
     
+    def _analyze_chunk_structure(self, chunk_text: str) -> Dict[str, Any]:
+        """
+        Analyze the structural elements of a chunk for enhanced metadata.
+        
+        Args:
+            chunk_text: The text content of the chunk
+            
+        Returns:
+            Dictionary containing structural analysis results
+        """
+        structure_info = {
+            "has_chapter": False,
+            "has_article": False,
+            "has_section": False,
+            "has_numbered_paragraphs": False,
+            "has_code_blocks": False,
+            "chapter_title": None,
+            "article_title": None,
+            "section_title": None,
+            "paragraph_count": 0,
+            "structure_type": "content"
+        }
+        
+        # Check for legal structure elements
+        lines = chunk_text.split('\n')
+        
+        for line in lines:
+            line_stripped = line.strip()
+            
+            # Chapter detection
+            if line_stripped.startswith('# CHAPTER') or line_stripped.startswith('CHAPTER '):
+                structure_info["has_chapter"] = True
+                structure_info["chapter_title"] = line_stripped
+                structure_info["structure_type"] = "chapter_header"
+            
+            # Article detection
+            elif line_stripped.startswith('## Article') or line_stripped.startswith('Article '):
+                structure_info["has_article"] = True
+                structure_info["article_title"] = line_stripped
+                structure_info["structure_type"] = "article_header"
+            
+            # Section detection
+            elif line_stripped.startswith('### Section') or line_stripped.startswith('Section '):
+                structure_info["has_section"] = True
+                structure_info["section_title"] = line_stripped
+                structure_info["structure_type"] = "section_header"
+            
+            # Numbered paragraph detection
+            elif line_stripped.startswith('(') and line_stripped[1:2].isdigit():
+                structure_info["has_numbered_paragraphs"] = True
+            
+            # Code block detection
+            elif line_stripped.startswith('```'):
+                structure_info["has_code_blocks"] = True
+        
+        # Count paragraphs (double newlines)
+        structure_info["paragraph_count"] = chunk_text.count('\n\n') + 1
+        
+        # Determine overall structure type if not already set
+        if structure_info["structure_type"] == "content":
+            if structure_info["has_numbered_paragraphs"]:
+                structure_info["structure_type"] = "numbered_content"
+            elif structure_info["has_code_blocks"]:
+                structure_info["structure_type"] = "code_content"
+            elif structure_info["paragraph_count"] > 3:
+                structure_info["structure_type"] = "multi_paragraph"
+            else:
+                structure_info["structure_type"] = "simple_content"
+        
+        return structure_info
+
     def _create_chunk_metadata(self, filepath: str, domain: str, chunk_index: int, document_title: str, char_count: int = 0) -> Dict[str, Any]:
-        """Create hierarchical metadata using metadata system"""
-        return self.metadata_manager.create_chunk_metadata(
+        """Create hierarchical metadata using metadata system with structural analysis"""
+        base_metadata = self.metadata_manager.create_chunk_metadata(
             filepath=filepath,
             domain=domain,
             chunk_index=chunk_index,
             document_title=document_title,
             char_count=char_count
         )
+        
+        return base_metadata
     
     def _create_chunk_id(self, filepath: str, domain: str, chunk_index: int) -> str:
         """Create standardized chunk ID"""
@@ -315,7 +643,7 @@ Please give a short succinct context to situate this chunk within the overall do
 [Original content]"""
 
                 response = self._genai_client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash-8b",
                     contents=[
                         types.Content(role='user', parts=[
                             types.Part.from_text(text=prompt)
@@ -491,6 +819,9 @@ Please give a short succinct context to situate this chunk within the overall do
                 'extraction_success': False
             })
             
+            # Analyze chunk structure for enhanced metadata
+            structure_analysis = self._analyze_chunk_structure(context_result['content'])
+            
             # Create hierarchical metadata using metadata system
             hierarchical_metadata = self._create_chunk_metadata(
                 filepath=chunk.metadata.get("source", ""),
@@ -517,12 +848,17 @@ Please give a short succinct context to situate this chunk within the overall do
             if document_metadata.get('regulation_number') and not combined_legal_metadata.get('regulation_number'):
                 combined_legal_metadata['regulation_number'] = document_metadata['regulation_number']
 
-            # Enhance metadata with both contextualization and extraction results
+            # Enhance metadata with contextualization, extraction, and structural analysis
             enhanced_metadata = self.metadata_manager.enhance_metadata(
                 base_metadata=hierarchical_metadata,
                 legal_metadata=combined_legal_metadata,
                 contextual_enhanced=context_result['contextualized']
             )
+            
+            # Add structural analysis to metadata
+            for key, value in structure_analysis.items():
+                if value is not None:  # Only add non-None values
+                    enhanced_metadata[f"structure.{key}"] = value
             
             # Create chunk ID for tracking
             chunk_id = self._create_chunk_id(chunk.metadata.get("source", ""), domain, i)
@@ -669,6 +1005,9 @@ Please give a short succinct context to situate this chunk within the overall do
                 final_chunks = []
                 
                 for i, chunk in enumerate(chunks):
+                    # Analyze chunk structure for enhanced metadata
+                    structure_analysis = self._analyze_chunk_structure(chunk.page_content)
+                    
                     # Create hierarchical metadata for non-contextualized chunks
                     hierarchical_metadata = self._create_chunk_metadata(
                         filepath=filepath,
@@ -684,6 +1023,11 @@ Please give a short succinct context to situate this chunk within the overall do
                         legal_metadata=None,
                         contextual_enhanced=False
                     )
+                    
+                    # Add structural analysis to metadata
+                    for key, value in structure_analysis.items():
+                        if value is not None:  # Only add non-None values
+                            enhanced_metadata[f"structure.{key}"] = value
                     
                     # Create chunk ID for tracking
                     chunk_id = self._create_chunk_id(filepath, domain, i)
@@ -915,6 +1259,63 @@ Please give a short succinct context to situate this chunk within the overall do
             print(f"❌ Error fixing inconsistencies: {e}")
             return False
     
+    def query_documents(self, query: str, k: int = 5, use_reranking: Optional[bool] = None) -> List[Dict[str, Any]]:
+        """
+        Query the document database with optional Cross-Encoder reranking.
+        
+        Args:
+            query: Search query text
+            k: Number of final results to return
+            use_reranking: Override config to enable/disable reranking for this query
+            
+        Returns:
+            List of relevant documents with metadata and optional rerank scores
+        """
+        self._init_rag_system()
+        
+        # Determine if we should use reranking
+        should_rerank = use_reranking if use_reranking is not None else (self.config.enable_reranking and self.cross_encoder is not None)
+        
+        # Determine how many to retrieve initially
+        if should_rerank:
+            initial_k = max(self.config.reranking_top_k, k * 2)  # Get more for reranking
+            final_k = k
+        else:
+            initial_k = k
+            final_k = k
+        
+        try:
+            # Query the vectorstore
+            results = self.rag_system.vectorstore.similarity_search_with_score(query, k=initial_k)
+            
+            # Convert to standard format
+            formatted_results = []
+            for doc, score in results:
+                result = {
+                    'page_content': doc.page_content,
+                    'metadata': doc.metadata,
+                    'similarity_score': float(score),
+                    'source': doc.metadata.get('document.source', 'unknown'),
+                    'chunk_index': doc.metadata.get('structure.chunk_index', 0)
+                }
+                formatted_results.append(result)
+            
+            # Apply reranking if enabled
+            if should_rerank and formatted_results:
+                print(f"🔍 Initial retrieval: {len(formatted_results)} documents")
+                reranked_results = self._rerank_results(query, formatted_results)
+                final_results = reranked_results[:final_k]
+                print(f"🎯 Final results after reranking: {len(final_results)} documents")
+            else:
+                final_results = formatted_results[:final_k]
+                print(f"🔍 Retrieved {len(final_results)} documents (no reranking)")
+            
+            return final_results
+            
+        except Exception as e:
+            print(f"❌ Query failed: {e}")
+            return []
+    
     def get_processing_stats(self) -> Dict[str, Any]:
         """Get comprehensive processing statistics"""
         return {
@@ -925,9 +1326,101 @@ Please give a short succinct context to situate this chunk within the overall do
             "config": {
                 "max_workers": self.config.max_workers,
                 "llm_extraction_enabled": self.config.enable_llm_extraction,
-                "extraction_timeout": self.config.extraction_timeout
+                "extraction_timeout": self.config.extraction_timeout,
+                "reranking_enabled": self.config.enable_reranking,
+                "reranking_model": self.config.reranking_model if self.config.enable_reranking else None,
+                "cross_encoder_loaded": self.cross_encoder is not None
             }
         }
+    
+    def analyze_chunking_comparison(self, filepath: str) -> Dict[str, Any]:
+        """
+        Compare structure-aware chunking vs traditional chunking for analysis.
+        
+        Args:
+            filepath: Path to document to analyze
+            
+        Returns:
+            Dictionary with comparison results
+        """
+        if not os.path.exists(filepath):
+            return {"error": f"File not found: {filepath}"}
+        
+        # Load document
+        loader = TextLoader(filepath, encoding='utf-8')
+        documents = loader.load()
+        
+        if not documents:
+            return {"error": "No content loaded"}
+        
+        text_content = documents[0].page_content
+        
+        # Traditional chunking
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        traditional_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=4000,
+            chunk_overlap=1000,
+            length_function=len,
+        )
+        traditional_chunks = traditional_splitter.split_text(text_content)
+        
+        # Structure-aware chunking
+        smart_chunks = self._smart_chunk_legal_markdown(text_content, chunk_size=4000)
+        
+        # Analyze both approaches
+        comparison = {
+            "document": filepath,
+            "document_length": len(text_content),
+            "traditional_chunking": {
+                "chunk_count": len(traditional_chunks),
+                "avg_chunk_size": sum(len(c) for c in traditional_chunks) / len(traditional_chunks),
+                "size_variance": self._calculate_variance([len(c) for c in traditional_chunks]),
+                "structure_breaks": self._count_structure_breaks(traditional_chunks)
+            },
+            "structure_aware_chunking": {
+                "chunk_count": len(smart_chunks),
+                "avg_chunk_size": sum(len(c) for c in smart_chunks) / len(smart_chunks),
+                "size_variance": self._calculate_variance([len(c) for c in smart_chunks]),
+                "structure_breaks": self._count_structure_breaks(smart_chunks)
+            }
+        }
+        
+        # Calculate improvements
+        comparison["improvements"] = {
+            "chunk_count_change": len(smart_chunks) - len(traditional_chunks),
+            "avg_size_change": comparison["structure_aware_chunking"]["avg_chunk_size"] - comparison["traditional_chunking"]["avg_chunk_size"],
+            "structure_preservation": comparison["traditional_chunking"]["structure_breaks"] - comparison["structure_aware_chunking"]["structure_breaks"],
+            "size_consistency": comparison["traditional_chunking"]["size_variance"] - comparison["structure_aware_chunking"]["size_variance"]
+        }
+        
+        return comparison
+    
+    def _calculate_variance(self, sizes: List[int]) -> float:
+        """Calculate variance in chunk sizes"""
+        if not sizes:
+            return 0.0
+        mean = sum(sizes) / len(sizes)
+        return sum((x - mean) ** 2 for x in sizes) / len(sizes)
+    
+    def _count_structure_breaks(self, chunks: List[str]) -> int:
+        """Count how many structural elements are broken across chunks"""
+        breaks = 0
+        
+        for i, chunk in enumerate(chunks[:-1]):  # Don't check last chunk
+            next_chunk = chunks[i + 1]
+            
+            # Check if chunk ends mid-article/chapter/section
+            if chunk.rstrip().endswith(('Article', 'CHAPTER', 'Section')):
+                breaks += 1
+            
+            # Check if chunk ends with incomplete numbered paragraph
+            lines = chunk.split('\n')
+            last_line = lines[-1] if lines else ""
+            if last_line.strip().startswith('(') and last_line.strip().endswith(')'):
+                # Might be incomplete numbered paragraph
+                breaks += 1
+                
+        return breaks
     
     def validate_metadata_consistency(self, domain: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1398,7 +1891,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Document Manager for Vector Database")
-    parser.add_argument("command", choices=["add", "update", "remove", "list", "validate", "info", "fix", "batch", "stats", "cleanup", "detect", "rebuild"])
+    parser.add_argument("command", choices=["add", "update", "remove", "list", "validate", "info", "fix", "batch", "stats", "cleanup", "detect", "rebuild", "compare", "query", "test-rerank"])
     parser.add_argument("filepath", nargs="?", help="Path to document file or batch file")
     parser.add_argument("--no-contextualize", action="store_true", help="Skip contextualization (enabled by default for enhanced retrieval)")
     parser.add_argument("--no-extraction", action="store_true", help="Skip LLM metadata extraction (enabled by default)")
@@ -1406,6 +1899,17 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=100, help="Batch size for vectorstore operations")
     parser.add_argument("--timeout", type=float, default=30.0, help="Timeout for contextualization requests")
     parser.add_argument("--extraction-timeout", type=float, default=25.0, help="Timeout for metadata extraction requests")
+    
+    # Reranking arguments
+    parser.add_argument("--enable-reranking", action="store_true", help="Enable Cross-Encoder reranking")
+    parser.add_argument("--rerank-model", default="cross-encoder/ms-marco-MiniLM-L-6-v2", help="Cross-Encoder model for reranking")
+    parser.add_argument("--rerank-top-k", type=int, default=20, help="Initial retrieval count for reranking")
+    parser.add_argument("--rerank-final-k", type=int, default=5, help="Final result count after reranking")
+    
+    # Query arguments
+    parser.add_argument("--query", type=str, help="Query text for search")
+    parser.add_argument("--results", type=int, default=5, help="Number of results to return")
+    parser.add_argument("--no-rerank", action="store_true", help="Disable reranking for this query")
     
     # Cleanup command arguments
     parser.add_argument("--confirm", action="store_true", help="Confirm destructive operations (required for actual cleanup)")
@@ -1417,12 +1921,19 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
+    # Determine reranking setting: use CLI flag if provided, otherwise use ProcessingConfig default (True)
+    enable_reranking = args.enable_reranking if hasattr(args, 'enable_reranking') and args.enable_reranking else ProcessingConfig().enable_reranking
+    
     config = ProcessingConfig(
         max_workers=args.workers,
         chunk_batch_size=args.batch_size,
         contextualize_timeout=args.timeout,
         enable_llm_extraction=not args.no_extraction,
-        extraction_timeout=args.extraction_timeout
+        extraction_timeout=args.extraction_timeout,
+        enable_reranking=enable_reranking,
+        reranking_model=args.rerank_model,
+        reranking_top_k=args.rerank_top_k,
+        reranking_final_k=args.rerank_final_k
     )
     
     manager = SimpleDocumentManager(config=config)
@@ -1556,17 +2067,43 @@ if __name__ == "__main__":
     elif args.command == "stats":
         stats = manager.get_processing_stats()
         print("📊 Document Manager Configuration:")
-        print(f"  🔧 Max Workers: {stats['max_workers']}")
-        print(f"  📦 Chunk Batch Size: {stats['chunk_batch_size']}")
-        print(f"  ⏱️  Contextualization Timeout: {stats['contextualize_timeout']}s")
-        print(f"  🔄 Retry Attempts: {stats['retry_attempts']}")
-        print(f"  🏷️  LLM Extraction: {'✅ Enabled' if stats['llm_extraction_enabled'] else '❌ Disabled'}")
-        if stats['llm_extraction_enabled']:
-            print(f"    ⏱️  Extraction Timeout: {stats['extraction_timeout']}s")
-            print(f"    🔄 Extraction Retries: {stats['extraction_retry_attempts']}")
-            print(f"    📦 Extraction Batch Size: {stats['extraction_batch_size']}")
-            print(f"    🤖 Extractor Available: {'✅ Yes' if stats['has_metadata_extractor'] else '❌ No'}")
+        print(f"  🔧 Max Workers: {stats['config']['max_workers']}")
+        print(f"  📦 Chunk Batch Size: {config.chunk_batch_size}")
+        print(f"  ⏱️  Contextualization Timeout: {config.contextualize_timeout}s")
+        print(f"  🔄 Retry Attempts: {config.retry_attempts}")
+        print(f"  🏷️  LLM Extraction: {'✅ Enabled' if stats['config']['llm_extraction_enabled'] else '❌ Disabled'}")
+        if stats['config']['llm_extraction_enabled']:
+            print(f"    ⏱️  Extraction Timeout: {stats['config']['extraction_timeout']}s")
+            print(f"    🔄 Extraction Retries: {config.extraction_retry_attempts}")
+            print(f"    📦 Extraction Batch Size: {config.extraction_batch_size}")
+            print(f"    🤖 Extractor Available: {'✅ Yes' if manager.metadata_extractor else '❌ No'}")
+        print(f"  🎯 Cross-Encoder Reranking: {'✅ Enabled' if stats['config']['reranking_enabled'] else '❌ Disabled'}")
+        if stats['config']['reranking_enabled']:
+            print(f"    🤖 Model: {stats['config']['reranking_model']}")
+            print(f"    📦 Initial retrieval: {config.reranking_top_k}")
+            print(f"    🎯 Final results: {config.reranking_final_k}")
+            print(f"    ✅ Model loaded: {'Yes' if stats['config']['cross_encoder_loaded'] else 'No'}")
+            if not RERANKING_AVAILABLE:
+                print(f"    ⚠️  sentence-transformers not installed")
+        else:
+            print(f"    💡 Enable with: --enable-reranking")
+        print()
+        print("📈 Processing Statistics:")
         print(f"  📚 Total Documents: {stats['total_documents']}")
+        print(f"  📄 Total Chunks: {stats['total_chunks']}")
+        print(f"  🧠 Contextualized: {stats['contextualized_documents']}")
+        print(f"  📝 Non-contextualized: {stats['non_contextualized_documents']}")
+        print()
+        print("🏗️  Chunking Method: Structure-Aware Legal Document Chunking")
+        print("  ✅ Preserves chapters, articles, and sections")
+        print("  ✅ Maintains numbered paragraph integrity")
+        print("  ✅ Protects code blocks from splitting")
+        print("  ✅ Prioritizes semantic boundaries over size limits")
+        print()
+        if stats['total_documents'] > 0:
+            avg_chunks = stats['total_chunks'] / stats['total_documents']
+            print(f"  📊 Average chunks per document: {avg_chunks:.1f}")
+        print("💡 Use 'compare <filepath>' to analyze chunking performance on specific documents")
     
     elif args.command == "cleanup":
         confirm = args.confirm if hasattr(args, 'confirm') else False
@@ -1629,6 +2166,124 @@ if __name__ == "__main__":
             if results["database_rebuilt"]:
                 print("  🏗️  Database rebuilt from registry.")
             sys.exit(0)
+    
+    elif args.command == "compare":
+        if not args.filepath:
+            print("❌ Error: 'compare' command requires filepath")
+            sys.exit(1)
+        
+        comparison = manager.analyze_chunking_comparison(args.filepath)
+        
+        if "error" in comparison:
+            print(f"❌ {comparison['error']}")
+            sys.exit(1)
+        
+        print(f"📊 Chunking Comparison for: {comparison['document']}")
+        print(f"📄 Document length: {comparison['document_length']:,} characters")
+        print()
+        
+        print("🔄 Traditional Chunking (RecursiveCharacterTextSplitter):")
+        trad = comparison['traditional_chunking']
+        print(f"  📦 Chunks: {trad['chunk_count']}")
+        print(f"  📏 Avg size: {trad['avg_chunk_size']:.0f} chars")
+        print(f"  📊 Size variance: {trad['size_variance']:.0f}")
+        print(f"  💔 Structure breaks: {trad['structure_breaks']}")
+        print()
+        
+        print("🏗️  Structure-Aware Chunking:")
+        smart = comparison['structure_aware_chunking']
+        print(f"  📦 Chunks: {smart['chunk_count']}")
+        print(f"  📏 Avg size: {smart['avg_chunk_size']:.0f} chars")
+        print(f"  📊 Size variance: {smart['size_variance']:.0f}")
+        print(f"  💔 Structure breaks: {smart['structure_breaks']}")
+        print()
+        
+        print("📈 Improvements:")
+        imp = comparison['improvements']
+        chunk_change = imp['chunk_count_change']
+        size_change = imp['avg_size_change']
+        structure_improvement = imp['structure_preservation']
+        consistency_improvement = imp['size_consistency']
+        
+        print(f"  📦 Chunk count: {chunk_change:+d} chunks")
+        print(f"  📏 Avg size: {size_change:+.0f} chars")
+        print(f"  🏗️  Structure preservation: {structure_improvement:+d} fewer breaks")
+        print(f"  📊 Size consistency: {consistency_improvement:+.0f} variance reduction")
+        
+        if structure_improvement > 0:
+            print("✅ Structure-aware chunking preserves document structure better!")
+        else:
+            print("⚠️  Traditional chunking performed similarly in structure preservation")
+        
+        sys.exit(0)
+    
+    elif args.command == "query":
+        if not args.query:
+            print("❌ Error: 'query' command requires --query argument")
+            print("💡 Example: python tools/document_manager.py query --query 'EU crowdfunding regulations' --results 3")
+            sys.exit(1)
+        
+        # Override reranking setting for this query if specified
+        use_reranking = None
+        if args.no_rerank:
+            use_reranking = False
+        elif args.enable_reranking:
+            use_reranking = True
+        
+        print(f"🔍 Searching for: '{args.query}'")
+        results = manager.query_documents(args.query, k=args.results, use_reranking=use_reranking)
+        
+        if not results:
+            print("📭 No results found")
+            sys.exit(0)
+        
+        print(f"\n📋 Found {len(results)} results:")
+        for i, result in enumerate(results, 1):
+            print(f"\n🔹 Result {i}:")
+            print(f"   📄 Source: {result['source']}")
+            print(f"   📍 Chunk: {result['chunk_index']}")
+            print(f"   📊 Similarity: {result['similarity_score']:.4f}")
+            if 'rerank_score' in result:
+                print(f"   🎯 Rerank Score: {result['rerank_score']:.4f}")
+            
+            # Preview content (first 200 chars)
+            content = result['page_content'][:200]
+            if len(result['page_content']) > 200:
+                content += "..."
+            print(f"   📝 Content: {content}")
+        
+        sys.exit(0)
+    
+    elif args.command == "test-rerank":
+        if not RERANKING_AVAILABLE:
+            print("❌ Reranking not available. Install with: pip install sentence-transformers")
+            sys.exit(1)
+        
+        # Test with a sample query or provided query
+        test_query = args.query or "What are the crowdfunding regulations in the EU?"
+        
+        print(f"🧪 Testing reranking with query: '{test_query}'")
+        print("🔍 Comparing results with and without reranking...")
+        
+        # Get results without reranking
+        print("\n📋 Results WITHOUT reranking:")
+        no_rerank_results = manager.query_documents(test_query, k=5, use_reranking=False)
+        
+        for i, result in enumerate(no_rerank_results[:3], 1):
+            print(f"  {i}. {result['source']} (similarity: {result['similarity_score']:.4f})")
+        
+        # Get results with reranking (if enabled)
+        if args.enable_reranking or manager.config.enable_reranking:
+            print("\n🎯 Results WITH reranking:")
+            rerank_results = manager.query_documents(test_query, k=5, use_reranking=True)
+            
+            for i, result in enumerate(rerank_results[:3], 1):
+                rerank_score = result.get('rerank_score', 'N/A')
+                print(f"  {i}. {result['source']} (similarity: {result['similarity_score']:.4f}, rerank: {rerank_score})")
+        else:
+            print("\n⚠️  Reranking not enabled. Use --enable-reranking to test reranking.")
+        
+        sys.exit(0)
     
     else:
         print(f"❌ Command '{args.command}' not yet implemented in this version")

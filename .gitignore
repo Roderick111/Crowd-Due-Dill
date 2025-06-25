@@ -34,3 +34,5 @@ Thumbs.db
 
 data/
 
+backups/database/*.tar.gz
+temp/

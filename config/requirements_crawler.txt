@@ -1,0 +1,11 @@
+# Web Crawler Dependencies for Crowd Due Dill
+# Install with: pip install -r config/requirements_crawler.txt
+
+# Core crawling library
+crawl4ai>=0.4.0
+
+# Additional dependencies for web crawling
+requests>=2.31.0
+
+# Note: Also run after installation:
+# playwright install 
