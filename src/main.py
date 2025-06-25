@@ -124,19 +124,61 @@ def router(state: State):
     return {"next": "advisory" if message_type == "advisory" else "analytical"}
 
 def get_rag_context(query: str, should_use_rag: bool) -> dict:
-    """Get RAG context for the query."""
+    """Get RAG context for the query with parallel hybrid retrieval."""
     if not should_use_rag:
         return {"type": "no_rag", "content": ""}
     
     try:
-        # Use RAG system for retrieval
+        # Use RAG system for parallel hybrid retrieval
         rag_result = rag_system.query(query, k=4)
         
-        # Check if we got results
-        query_type = rag_result.get("metadata", {}).get("query_type", "unknown")
+        # Check if we got results from the new parallel structure
+        search_strategy = rag_result.get("search_strategy", "unknown")
+        total_results = rag_result.get("total_results", 0)
         
-        if query_type == "rag" and rag_result.get("chunks"):
-            # Build context from chunks
+        if search_strategy == "parallel_hybrid" and total_results > 0:
+            # Build context from both vector and keyword results
+            context_parts = []
+            
+            # Process vector+reranked results (5 results)
+            vector_results = rag_result.get("vector_results", [])
+            if vector_results:
+                context_parts.append("# Vector Search + Cross-Encoder Reranking Results:")
+                for i, result in enumerate(vector_results, 1):
+                    content = result.get("page_content", "")
+                    rerank_score = result.get("rerank_score", 0.0)
+                    if content:
+                        context_parts.append(f"## Vector Result {i} (Rerank Score: {rerank_score:.3f}):")
+                        context_parts.append(content)
+            
+            # Process keyword search results (3 results)
+            keyword_results = rag_result.get("keyword_results", [])
+            if keyword_results:
+                context_parts.append("\n# Keyword Search Results (Precise Matches):")
+                for i, result in enumerate(keyword_results, 1):
+                    content = result.get("page_content", "")
+                    if content:
+                        context_parts.append(f"## Keyword Result {i} (Precise Match):")
+                        context_parts.append(content)
+            
+            if context_parts:
+                # Add parallel search metadata
+                query_info = rag_result.get("query_info", {})
+                processing_time = rag_result.get("processing_time", 0.0)
+                
+                context_header = f"""# Parallel Hybrid Search Results
+Query Type: {query_info.get('query_type', 'unknown')} (Confidence: {query_info.get('confidence', 0.0):.2f})
+Vector Results: {len(vector_results)} | Keyword Results: {len(keyword_results)}
+Processing Time: {processing_time:.3f}s
+
+"""
+                
+                context = context_header + "\n\n".join(context_parts)
+                return {"type": "parallel_hybrid", "content": context}
+        
+        # Fallback: check for legacy format results
+        elif rag_result.get("chunks"):
+            # Legacy format support
             context_parts = []
             for chunk in rag_result["chunks"]:
                 content = chunk.get("content", "")
@@ -244,6 +286,9 @@ You naturally know this current regulatory context. When asked about current dat
     if rag_type == "rag_context":
         context_verb = "strategic guidance" if agent_type == "advisory" else "technical analysis"
         system_content += f"\n\nUse this knowledge to inform your {context_verb}:{rag_context}. Never reference chunk numbers. But always reference sources, article numbers, etc."
+    elif rag_type == "parallel_hybrid":
+        context_verb = "strategic guidance" if agent_type == "advisory" else "technical analysis"
+        system_content += f"\n\n## Parallel Hybrid Search Knowledge\n\nYou have access to both vector search results (with cross-encoder reranking) AND keyword search results (precise matches). Use this comprehensive knowledge to inform your {context_verb}:\n\n{rag_context}\n\n**Important Instructions:**\n- Prioritize keyword results for precise article/regulation lookups\n- Use vector results for broader semantic context and related information\n- Always reference specific sources, article numbers, and regulations\n- Never mention 'chunk numbers', 'vector results', or 'keyword results' in your response\n- Synthesize information from both search types naturally"
     
     # Create conversation and get response
     conversation_messages = [{"role": "system", "content": system_content}]
