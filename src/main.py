@@ -93,7 +93,7 @@ Message types:
 Use RAG knowledge base if user:
 - Asks about ANY EU regulations (Crowdfunding, GDPR, DSA, DORA, AML, Credit Scoring, etc.)
 - Needs guidance on compliance requirements and procedures for ANY regulation
-- Seeks information about legal definitions or regulatory frameworks
+- Seeks information about legal definitions, articles or regulatory frameworks
 - Asks about regulatory articles, provisions, or specific requirements
 - Inquires about regulatory obligations, enforcement, or penalties
 - Needs clarification on compliance procedures or legal requirements
@@ -103,7 +103,6 @@ Use RAG knowledge base if user:
 Do NOT use RAG for:
 - Simple greetings or general conversation  
 - Non-regulatory topics (weather, cooking, general business advice)
-- Basic definitions that don't require regulatory context
 - Simple factual questions that can be answered with general knowledge"""
         },
         {

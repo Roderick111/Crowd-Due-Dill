@@ -115,9 +115,13 @@ async def example_save_and_add_to_db():
         
         # Add to database (commented out to avoid modifying production DB)
         print("📊 Adding to database...")
-        # added_count = await crawler.add_to_database(successful, "example_crawled")
-        # print(f"✅ Added {added_count} documents to database")
-        print("⚠️ Database addition skipped in example (uncomment to use)")
+        # Uncomment the lines below to add to database (ensure database is set up):
+        # try:
+        #     added_count = await crawler.add_to_database(successful, "example_crawled")
+        #     print(f"✅ Added {added_count} documents to database")
+        # except Exception as e:
+        #     print(f"❌ Database operation failed: {e}")
+        print("⚠️ Database addition skipped in example (see comments above to enable)")
     
     print("\n")
 

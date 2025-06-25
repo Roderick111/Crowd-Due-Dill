@@ -3,7 +3,7 @@
 # Vector Database Backup Script
 # Creates timestamped backup of the local vector database
 
-set -e
+set -euo pipefail
 
 # Colors for output
 GREEN='\033[0;32m'

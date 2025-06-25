@@ -551,9 +551,19 @@ class WebCrawler:
         
         # Clean up temp directory if empty
         temp_dir = Path("temp")
-        if temp_dir.exists() and not any(temp_dir.iterdir()):
-            temp_dir.rmdir()
-        
+        if temp_dir.exists():
+            import time
+            current_time = time.time()
+            for temp_file in temp_dir.glob("temp_crawled_*.md"):
+                if current_time - temp_file.stat().st_mtime > 3600:  # 1 hour
+                    try:
+                        temp_file.unlink()
+                    except Exception:
+                        pass
+
+            # Remove directory if empty
+            if not any(temp_dir.iterdir()):
+                temp_dir.rmdir()
         self.logger.info(f"✅ Successfully added {added_count} documents to database")
         return added_count
 
