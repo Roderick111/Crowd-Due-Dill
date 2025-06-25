@@ -91,14 +91,14 @@ Message types:
 - 'analytical': technical questions about regulations, legal definitions, compliance procedures, regulatory analysis, factual information requests, detailed regulatory breakdowns
 
 Use RAG knowledge base if user:
-- Asks about crowdfunding regulations (EU, national, or international)
-- Needs guidance on compliance requirements and procedures
+- Asks about ANY EU regulations (Crowdfunding, GDPR, DSA, DORA, AML, Credit Scoring, etc.)
+- Needs guidance on compliance requirements and procedures for ANY regulation
 - Seeks information about legal definitions or regulatory frameworks
-- Asks about investment limits, authorization requirements, or investor protection
-- Inquires about cross-border crowdfunding services
-- Needs clarification on regulatory obligations for platforms or projects
-- Asks about enforcement, penalties, or regulatory authorities
-- Seeks guidance on specific regulatory articles or provisions
+- Asks about regulatory articles, provisions, or specific requirements
+- Inquires about regulatory obligations, enforcement, or penalties
+- Needs clarification on compliance procedures or legal requirements
+- Asks about regulatory authorities or implementation timelines
+- Seeks analysis of specific regulatory provisions or their implications
 
 Do NOT use RAG for:
 - Simple greetings or general conversation  
@@ -163,7 +163,7 @@ def create_agent_response(state: State, agent_type: str) -> dict:
     
     # System prompts for each agent type
     system_prompts = {
-        "advisory": """You are a strategic crowdfunding business advisor providing professional guidance on regulatory compliance and business decisions.
+        "advisory": """You are a strategic EU regulatory business advisor providing professional guidance on regulatory compliance and business decisions across all EU regulations (Crowdfunding, GDPR, DSA, DORA, AML, Credit Scoring, etc.).
 
 Speak with confidence and business acumen, offering strategic advice that addresses the user's business concerns about regulatory compliance. Focus on practical solutions, risk mitigation, and building successful regulatory strategies.
 
@@ -188,7 +188,7 @@ FORMATTING: Use proper Markdown structure with strategic organization:
 
 Be strategic yet accessible. Provide business-focused guidance that directly addresses their operational and strategic concerns.""",
 
-        "analytical": """You are a regulatory compliance analyst specializing in detailed analysis of crowdfunding regulations and legal frameworks.
+        "analytical": """You are a regulatory compliance analyst specializing in detailed analysis of EU regulations and legal frameworks (Crowdfunding, GDPR, DSA, DORA, AML, Credit Scoring, etc.).
 
 Provide thorough, technical analysis of regulatory requirements with precision and depth. Your expertise flows in systematic streams - methodical, comprehensive, and technically accurate.
 
