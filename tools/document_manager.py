@@ -638,7 +638,9 @@ Document: {document_title} | Domain: {domain}
 
 {chunk_content}
 
-Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Answer only with the succinct context and nothing else.
+CRITICAL: If this chunk contains a specific Article number (e.g., "Article 22", "Article 15"), you MUST preserve that exact article number in your context. DO NOT confuse or mix article numbers from different parts of the document.
+
+Please give a short succinct context to situate this chunk within the overall document for the purposes of improving search retrieval of the chunk. Ensure the context accurately reflects the specific article content and does not mix up article numbers. Answer only with the succinct context and nothing else.
 
 [Original content]"""
 
@@ -1886,12 +1888,91 @@ Please give a short succinct context to situate this chunk within the overall do
                 print(f"📋 Would remove {orphaned_count} orphaned chunks")
         
         return cleanup_results
+    
+    def fix_article_contextualization(self, confirm: bool = False) -> Dict[str, Any]:
+        """
+        Fix incorrect article contextualization by re-processing the DSA document.
+        
+        This addresses the specific issue where Article 22 (Trusted Flaggers) was incorrectly
+        contextualized as Articles 87-90 (Delegation of Power).
+        
+        Args:
+            confirm: If True, actually performs the fix
+            
+        Returns:
+            Dictionary with fix results
+        """
+        
+        if not confirm:
+            return {
+                "status": "preview",
+                "message": "Use --confirm to actually perform the fix",
+                "target_documents": ["crawled_content/digital_act.md"],
+                "expected_fixes": [
+                    "Re-contextualize Article 22 chunks with correct content",
+                    "Validate article number metadata matches chunk content",
+                    "Remove misleading delegation/committee summaries from Article 22"
+                ]
+            }
+        
+        print("🔧 Fixing article contextualization issue...")
+        
+        # Target the DSA document specifically
+        dsa_file = "crawled_content/digital_act.md"
+        
+        try:
+            # Remove and re-add the DSA document with improved processing
+            print(f"📋 Re-processing {dsa_file} with fixed contextualization...")
+            
+            # Remove existing chunks
+            success = self._remove_existing_chunks(dsa_file)
+            if not success:
+                return {
+                    "status": "error",
+                    "message": f"Failed to remove existing chunks for {dsa_file}"
+                }
+            
+            # Re-add with improved contextualization
+            success = self.add_document(dsa_file, "eu_crowdfunding", contextualize=True)
+            
+            if success:
+                print("✅ DSA document re-processed successfully")
+                
+                # Test the fix
+                print("🧪 Testing Article 22 retrieval...")
+                test_results = self.query_documents("Article 22 DSA trusted flaggers", k=3)
+                
+                article_22_found = False
+                for result in test_results:
+                    content = result.get('content', '')
+                    if 'trusted flagger' in content.lower() and 'article 22' in content.lower():
+                        article_22_found = True
+                        break
+                
+                return {
+                    "status": "success",
+                    "message": "Article contextualization fixed successfully",
+                    "processed_document": dsa_file,
+                    "test_passed": article_22_found,
+                    "test_results_summary": f"Found {len(test_results)} results for Article 22 test query"
+                }
+            else:
+                return {
+                    "status": "error", 
+                    "message": f"Failed to re-process {dsa_file}"
+                }
+                
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error during article contextualization fix: {e}"
+            }
 
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Document Manager for Vector Database")
-    parser.add_argument("command", choices=["add", "update", "remove", "list", "validate", "info", "fix", "batch", "stats", "cleanup", "detect", "rebuild", "compare", "query", "test-rerank"])
+    parser.add_argument("command", choices=["add", "update", "remove", "list", "validate", "info", "fix", "batch", "stats", "cleanup", "detect", "rebuild", "compare", "query", "test-rerank", "fix-articles"])
     parser.add_argument("filepath", nargs="?", help="Path to document file or batch file")
     parser.add_argument("--no-contextualize", action="store_true", help="Skip contextualization (enabled by default for enhanced retrieval)")
     parser.add_argument("--no-extraction", action="store_true", help="Skip LLM metadata extraction (enabled by default)")
@@ -2283,6 +2364,31 @@ if __name__ == "__main__":
         else:
             print("\n⚠️  Reranking not enabled. Use --enable-reranking to test reranking.")
         
+        sys.exit(0)
+    
+    elif args.command == "fix-articles":
+        confirm = args.confirm if hasattr(args, 'confirm') else False
+        results = manager.fix_article_contextualization(confirm=confirm)
+        
+        if results["status"] == "preview":
+            print("🔍 Article Contextualization Fix Preview:")
+            print(f"  📋 Target documents: {', '.join(results['target_documents'])}")
+            print("  🔧 Expected fixes:")
+            for fix in results["expected_fixes"]:
+                print(f"    - {fix}")
+            print(f"\n💡 {results['message']}")
+            
+        elif results["status"] == "success":
+            print("✅ Article contextualization fix completed successfully!")
+            print(f"  📄 Processed: {results['processed_document']}")
+            print(f"  🧪 Test passed: {'✅ Yes' if results['test_passed'] else '❌ No'}")
+            print(f"  📊 {results['test_results_summary']}")
+            print("\n🎉 Article 22 should now correctly return trusted flaggers content!")
+            
+        elif results["status"] == "error":
+            print(f"❌ Error: {results['message']}")
+            sys.exit(1)
+            
         sys.exit(0)
     
     else:

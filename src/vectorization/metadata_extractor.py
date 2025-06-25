@@ -153,6 +153,7 @@ CHUNK-LEVEL STRUCTURE:
 - Find article references: "Article N", "Art. N", etc.
 - Identify section hierarchies: numbered/lettered subsections
 - DO NOT extract regulation numbers (handled at document level)
+- CRITICAL: Only extract the PRIMARY article number that this chunk is ABOUT, not article numbers mentioned in passing or as references
 
 LEGAL CONTENT CLASSIFICATION:
 - provision_type: Classify as 'obligation' (must do), 'prohibition' (must not do), 'exemption' (exception), 'definition' (defines terms), or 'other'
@@ -164,7 +165,9 @@ CONFIDENCE SCORING:
 - Rate extraction confidence from 0.0 (uncertain) to 1.0 (very confident)
 - Consider text clarity, explicit mentions, and context completeness
 
-Be precise and conservative. Return null/empty for unclear information."""
+Be precise and conservative. Return null/empty for unclear information.
+
+IMPORTANT: If a chunk starts with "## Article N" where N is a number, that is the PRIMARY article this chunk is about - use that number. Do not use article numbers that are just mentioned in passing within the text."""
 
         user_prompt = f"""Document Title: {document_title}
 Domain: {domain}
@@ -366,7 +369,7 @@ Extract the document-level metadata for the PRIMARY regulation that this documen
         
         # Note: regulation_number is handled at document level, not chunk level
         
-        # Validate article number format
+        # Validate article number format and ensure it matches chunk content
         if extracted_data.get("article_number"):
             article = extracted_data["article_number"]
             if not re.search(r"Article\s+\d+", article, re.IGNORECASE):
@@ -376,6 +379,23 @@ Extract the document-level metadata for the PRIMARY regulation that this documen
                     extracted_data["article_number"] = f"Article {match.group(1)}"
                 else:
                     extracted_data["article_number"] = None
+            else:
+                # Validate that the extracted article number actually appears in the chunk
+                article_num = re.search(r"Article\s+(\d+)", article, re.IGNORECASE)
+                if article_num:
+                    expected_pattern = f"Article\\s+{article_num.group(1)}"
+                    if not re.search(expected_pattern, chunk_content, re.IGNORECASE):
+                        # Article number doesn't match chunk content - try to extract correct one
+                        match = re.search(r"Article\s+(\d+)", chunk_content, re.IGNORECASE)
+                        if match:
+                            extracted_data["article_number"] = f"Article {match.group(1)}"
+                        else:
+                            extracted_data["article_number"] = None
+        else:
+            # Try to extract article number if not found by LLM
+            match = re.search(r"Article\s+(\d+)", chunk_content, re.IGNORECASE)
+            if match:
+                extracted_data["article_number"] = f"Article {match.group(1)}"
         
         # Normalize provision types
         provision_type = extracted_data.get("provision_type", "other").lower()
