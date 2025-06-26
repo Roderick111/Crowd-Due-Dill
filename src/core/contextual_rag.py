@@ -69,7 +69,7 @@ class OptimizedContextualRAGSystem:
         """Initialize OpenAI embeddings with resilience."""
         try:
             self.embeddings = OpenAIEmbeddings(
-                model="text-embedding-3-small",
+                model="text-embedding-3-large",
                 show_progress_bar=False,
                 max_retries=3,
                 timeout=30.0
@@ -135,7 +135,7 @@ class OptimizedContextualRAGSystem:
         collection_metadata = {
             "version": "2.1.0",
             "created": datetime.now().isoformat(),
-            "embedding_model": "text-embedding-3-small",
+            "embedding_model": "text-embedding-3-large",
             "description": "Crowdfunding regulation knowledge base with domain-aware RAG",
             "domains": "lunar,ifs,astrology,crystals,numerology,tarot",
             "hnsw_config": "optimized",
@@ -589,16 +589,23 @@ class OptimizedContextualRAGSystem:
             search_type: Type of search performed
             
         Returns:
-            List of formatted result dictionaries
+            List of formatted result dictionaries with original content when available
         """
         results = []
         for i, doc in enumerate(docs):
+            # Use original content if available, otherwise use embedded content
+            content = doc.metadata.get('original_content', doc.page_content)
+            
             result = {
-                'page_content': doc.page_content,
-                'metadata': doc.metadata,
+                'page_content': content,
+                'metadata': doc.metadata.copy(),
                 'search_type': search_type,
                 'rank': i + 1
             }
+            
+            # Add context summary if available
+            if 'context_summary' in doc.metadata:
+                result['context_summary'] = doc.metadata['context_summary']
             
             # Add search-specific metadata
             if search_type == 'vector_reranked':
@@ -606,6 +613,13 @@ class OptimizedContextualRAGSystem:
                 result['similarity_score'] = doc.metadata.get('_similarity_score', 0.0)
             elif search_type == 'keyword_precise':
                 result['precise_match'] = doc.metadata.get('_precise_match', True)
+            
+            # Clean up internal metadata for display
+            display_metadata = result['metadata'].copy()
+            for key in ['original_content', 'hybrid_content']:
+                if key in display_metadata:
+                    del display_metadata[key]
+            result['metadata'] = display_metadata
             
             results.append(result)
         
@@ -635,7 +649,7 @@ class OptimizedContextualRAGSystem:
             metadata_filters = []
             
             # 1. Always filter by exact article number (most important)
-            metadata_filters.append({"structure.article_number": {"$eq": article_text}})
+            metadata_filters.append({"article_number": {"$eq": article_text}})
             
             # 2. Add regulation source filter if specified
             if query_info.get('regulation'):
@@ -648,7 +662,7 @@ class OptimizedContextualRAGSystem:
                 }
                 source_value = regulation_map.get(reg.lower())
                 if source_value:
-                    metadata_filters.append({"document.source": {"$eq": source_value}})
+                    metadata_filters.append({"source": {"$eq": source_value}})
             
             # Build final where clause with $and operator
             if len(metadata_filters) == 1:
@@ -729,7 +743,7 @@ class OptimizedContextualRAGSystem:
                 }
                 source_value = regulation_map.get(reg.lower())
                 if source_value:
-                    where_metadata_filter = {"document.source": {"$eq": source_value}}
+                    where_metadata_filter = {"source": {"$eq": source_value}}
             
             # Execute text-only keyword search
             chroma_results = self.vectorstore._collection.get(

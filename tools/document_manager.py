@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from datetime import datetime
 
 # Suppress noisy Google Gen AI logging
 import logging
@@ -150,14 +151,57 @@ class DocumentManager:
             self.rag_system = OptimizedContextualRAGSystem()
     
     def _add_documents_to_vectorstore(self, documents: List[Document]) -> bool:
-        """Add processed documents to the vector store"""
+        """Add documents to vectorstore with hybrid content approach"""
         try:
-            self._init_rag_system()
-            self.rag_system.vectorstore.add_documents(documents)
+            # Create embedding documents that use hybrid content for vectorization
+            # but preserve original content in page_content
+            embedding_documents = []
+            
+            for doc in documents:
+                # Create a copy for embedding
+                embedding_doc = Document(
+                    page_content=doc.metadata.get('hybrid_content', doc.page_content),
+                    metadata=self._filter_metadata_for_chromadb(doc.metadata)
+                )
+                embedding_documents.append(embedding_doc)
+            
+            # Add to vectorstore using hybrid content for embeddings
+            self.rag_system.vectorstore.add_documents(embedding_documents)
+            
+            print(f"✅ Added {len(embedding_documents)} documents with hybrid embeddings and preserved original content")
             return True
+                
         except Exception as e:
             print(f"❌ Error adding documents to vectorstore: {e}")
             return False
+    
+    def _filter_metadata_for_chromadb(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Filter metadata to keep only ChromaDB-compatible types (str, int, float, bool, None)"""
+        filtered = {}
+        for key, value in metadata.items():
+            if value is None:
+                filtered[key] = value
+            elif isinstance(value, (str, int, float, bool)):
+                filtered[key] = value
+            elif isinstance(value, list):
+                # Convert lists to strings for ChromaDB compatibility
+                if all(isinstance(item, (str, int, float)) for item in value):
+                    filtered[key] = ', '.join(map(str, value))
+                else:
+                    # Skip complex lists
+                    continue
+            elif isinstance(value, dict):
+                # Skip complex dictionaries
+                continue
+            else:
+                # Convert other types to strings
+                filtered[key] = str(value)
+                
+        # Ensure original_content is always preserved (critical for our fix)
+        if 'original_content' in metadata and 'original_content' not in filtered:
+            filtered['original_content'] = str(metadata['original_content'])
+            
+        return filtered
     
     def _smart_chunk_legal_markdown(self, text: str, chunk_size: int = 4000) -> List[str]:
         """Smart chunking for legal documents that preserves structure"""
@@ -270,14 +314,14 @@ class DocumentManager:
             print(f"❌ Error loading document {filepath}: {e}")
             return []
     
-    def _contextualize_chunk_with_retry(self, chunk_data: Tuple[int, str, str, str]) -> Tuple[int, str, int, bool]:
-        """Contextualize a single chunk with retry logic"""
+    def _contextualize_chunk_with_retry(self, chunk_data: Tuple[int, str, str, str]) -> Tuple[int, str, str, int, bool]:
+        """Contextualize a single chunk with retry logic - now returns both original and context"""
         chunk_index, chunk_text, document_title, filepath = chunk_data
         
         for attempt in range(self.config.retry_attempts):
             try:
                 prompt = f"""
-You are contextualizing a chunk from a legal document for a vector database.
+You are creating a brief contextual summary for a legal document chunk to improve search retrieval.
 
 Document: {document_title}
 Source: {filepath}
@@ -285,37 +329,37 @@ Source: {filepath}
 Original chunk:
 {chunk_text}
 
-Please provide a contextualized version that:
-1. Preserves all original content exactly
-2. Adds brief context about the document source
-3. Maintains all article numbers, section references, and legal citations
-4. Keeps the chunk focused and relevant
+Create a SHORT contextual summary that:
+1. Identifies the main topic/article being discussed
+2. Explains how this relates to the overall document
+3. Preserves key article numbers and legal references
+4. Uses clear, searchable language
+5. Is 2-3 sentences maximum
 
-Contextualized chunk:"""
+Context summary:"""
 
                 response = self._genai_client.models.generate_content(
                     model='gemini-2.0-flash-exp',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.1,
-                        max_output_tokens=2000,
-                        timeout=self.config.contextualize_timeout
+                        max_output_tokens=500  # Removed timeout parameter
                     )
                 )
                 
                 if response and response.text:
-                    contextualized_text = response.text.strip()
-                    return (chunk_index, contextualized_text, len(contextualized_text), True)
+                    context_summary = response.text.strip()
+                    return (chunk_index, chunk_text, context_summary, len(chunk_text), True)
                 else:
                     print(f"⚠️  Empty response for chunk {chunk_index}, attempt {attempt + 1}")
                 
             except Exception as e:
                 print(f"⚠️  Contextualization failed for chunk {chunk_index}, attempt {attempt + 1}: {e}")
                 if attempt == self.config.retry_attempts - 1:
-                    return (chunk_index, chunk_text, len(chunk_text), False)
+                    return (chunk_index, chunk_text, "", len(chunk_text), False)
                 time.sleep(1)
         
-        return (chunk_index, chunk_text, len(chunk_text), False)
+        return (chunk_index, chunk_text, "", len(chunk_text), False)
 
     def _process_chunks_parallel(self, chunks: List[Document], document_title: str) -> Tuple[List[Document], Dict[str, Any]]:
         """Process chunks in parallel for contextualization and metadata extraction"""
@@ -342,12 +386,32 @@ Contextualized chunk:"""
             
             with tqdm(total=len(chunk_data), desc="Contextualizing", unit="chunk") as pbar:
                 for future in as_completed(context_futures):
-                    chunk_index, contextualized_text, char_count, success = future.result()
-                    if success:
-                        processed_chunks[chunk_index].page_content = contextualized_text
-                        processed_chunks[chunk_index].metadata['contextualized'] = True
-                        processed_chunks[chunk_index].metadata['char_count'] = char_count
+                    chunk_index, original_text, context_summary, char_count, success = future.result()
+                    
+                    # CRITICAL: Preserve original content and add context
+                    chunk = processed_chunks[chunk_index]
+                    
+                    if success and context_summary:
+                        # Store original content as main content
+                        chunk.page_content = original_text
+                        
+                        # Add context summary to metadata
+                        chunk.metadata['context_summary'] = context_summary
+                        chunk.metadata['contextualized'] = True
+                        
+                        # Create hybrid content for embedding (original + context)
+                        hybrid_content = f"{context_summary}\n\nOriginal content:\n{original_text}"
+                        chunk.metadata['hybrid_content'] = hybrid_content
+                        
                         processing_stats['contextualized_count'] += 1
+                    else:
+                        # Keep original content if contextualization failed
+                        chunk.page_content = original_text
+                        chunk.metadata['context_summary'] = ""
+                        chunk.metadata['contextualized'] = False
+                        chunk.metadata['hybrid_content'] = original_text
+                    
+                    chunk.metadata['char_count'] = char_count
                     pbar.update(1)
         
         # Parallel metadata extraction
@@ -404,52 +468,86 @@ Contextualized chunk:"""
             
             # Process chunks (contextualize and extract metadata)
             if contextualize:
-                processed_chunks, stats = self._process_chunks_parallel(chunks, os.path.basename(filepath))
-                print(f"✅ Processing complete: {stats['contextualized_count']}/{stats['total_chunks']} contextualized, "
-                      f"{stats['metadata_extracted_count']}/{stats['total_chunks']} metadata extracted")
+                processed_chunks, processing_stats = self._process_chunks_parallel(chunks, os.path.basename(filepath))
             else:
                 processed_chunks = chunks
-                print(f"📝 Skipped contextualization for {len(chunks)} chunks")
+                processing_stats = {'contextualized_count': 0, 'metadata_extracted_count': 0, 'total_chunks': len(chunks)}
             
-            # Add to vector store
-            if not self._add_documents_to_vectorstore(processed_chunks):
+            # Add to vectorstore
+            success = self._add_documents_to_vectorstore(processed_chunks)
+            if not success:
                 return False
             
             # Update registry
             chunk_ids = [chunk.metadata['chunk_id'] for chunk in processed_chunks]
             self.registry[filepath] = DocumentRecord(
-                        filepath=filepath,
+                filepath=filepath,
                 chunk_count=len(processed_chunks),
-                last_updated=time.strftime('%Y-%m-%d %H:%M:%S'),
+                last_updated=datetime.now().isoformat(),
                 file_hash=current_hash,
-                    chunk_ids=chunk_ids,
-                    contextualized=contextualize
-                )
-                
+                chunk_ids=chunk_ids,
+                contextualized=contextualize and processing_stats['contextualized_count'] > 0
+            )
             self._save_registry()
-            print(f"✅ Successfully added {filepath} with {len(processed_chunks)} chunks")
+            
+            print(f"✅ Successfully added {filepath}")
+            print(f"   📊 {len(processed_chunks)} chunks, {processing_stats['contextualized_count']} contextualized")
             return True
-                
+            
         except Exception as e:
             print(f"❌ Error adding document {filepath}: {e}")
             return False
     
     def _remove_existing_chunks(self, filepath: str) -> bool:
-        """Remove existing chunks for a document from the vector store"""
+        """Remove existing chunks for a document from vectorstore"""
         try:
             if filepath not in self.registry:
                 return True
             
-            self._init_rag_system()
+            record = self.registry[filepath]
             
-            chunk_ids = self.registry[filepath].chunk_ids
-            if chunk_ids:
-                self.rag_system.vectorstore.delete(ids=chunk_ids)
-                print(f"🗑️  Removed {len(chunk_ids)} existing chunks for {filepath}")
+            # Use ChromaDB delete functionality if available
+            if hasattr(self.rag_system.vectorstore, '_collection'):
+                collection = self.rag_system.vectorstore._collection
+                
+                # Delete by source metadata
+                try:
+                    collection.delete(where={"source": filepath})
+                    print(f"🗑️  Removed chunks for {filepath} using ChromaDB delete")
+                    return True
+                except Exception as e:
+                    print(f"⚠️  ChromaDB delete failed: {e}")
             
-            return True
+            # Fallback: recreate collection (more drastic but reliable)
+            try:
+                print(f"🔄 Recreating collection to remove chunks for {filepath}")
+                
+                # Get all documents except the one we're removing
+                all_docs = []
+                for other_filepath, other_record in self.registry.items():
+                    if other_filepath != filepath:
+                        other_chunks = self._load_and_chunk_document(other_filepath)
+                        if other_record.contextualized:
+                            other_chunks, _ = self._process_chunks_parallel(other_chunks, os.path.basename(other_filepath))
+                        all_docs.extend(other_chunks)
+                
+                # Recreate vectorstore
+                if hasattr(self.rag_system.vectorstore, '_collection'):
+                    collection = self.rag_system.vectorstore._collection
+                    collection.delete()  # Clear collection
+                
+                # Re-add all other documents
+                if all_docs:
+                    self._add_documents_to_vectorstore(all_docs)
+                
+                return True
+                
+            except Exception as e:
+                print(f"❌ Failed to recreate collection: {e}")
+                return False
+                
         except Exception as e:
-            print(f"⚠️  Error removing existing chunks for {filepath}: {e}")
+            print(f"❌ Error removing chunks for {filepath}: {e}")
             return False
     
     def update_document(self, filepath: str, contextualize: bool = True) -> bool:
@@ -464,10 +562,10 @@ Contextualized chunk:"""
                 return False
             
             success = self._remove_existing_chunks(filepath)
-            del self.registry[filepath]
-            self._save_registry()
-            
-            print(f"✅ Successfully removed {filepath}")
+            if success:
+                del self.registry[filepath]
+                self._save_registry()
+                print(f"✅ Successfully removed {filepath}")
             return success
                 
         except Exception as e:
@@ -503,34 +601,46 @@ Contextualized chunk:"""
         """Add multiple documents in batch"""
         results = {}
         
-        print(f"📚 Processing {len(filepaths)} documents in batch...")
-        
-        for filepath in tqdm(filepaths, desc="Adding documents", unit="doc"):
-            try:
+        try:
+            for filepath in filepaths:
                 results[filepath] = self.add_document(filepath, contextualize)
-            except Exception as e:
-                print(f"❌ Error processing {filepath}: {e}")
-                results[filepath] = False
-        
+                
+        except Exception as e:
+            print(f"❌ Error in batch processing: {e}")
+            for filepath in filepaths:
+                if filepath not in results:
+                    results[filepath] = False
+                    
         return results
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get processing statistics"""
-        total_docs = len(self.registry)
-        contextualized_docs = sum(1 for record in self.registry.values() if record.contextualized)
-        total_chunks = sum(record.chunk_count for record in self.registry.values())
-        
-        return {
-            'total_documents': total_docs,
-            'contextualized_documents': contextualized_docs,
-            'non_contextualized_documents': total_docs - contextualized_docs,
-            'total_chunks': total_chunks,
-            'config': {
-                'max_workers': self.config.max_workers,
-                'llm_extraction_enabled': self.config.enable_llm_extraction,
-                'extraction_timeout': self.config.extraction_timeout
+        """Get comprehensive statistics"""
+        try:
+            stats = {
+                'total_documents': len(self.registry),
+                'total_chunks': sum(record.chunk_count for record in self.registry.values()),
+                'contextualized_documents': sum(1 for record in self.registry.values() if record.contextualized),
+                'documents': [
+                    {
+                        'filepath': record.filepath,
+                        'chunk_count': record.chunk_count,
+                        'last_updated': record.last_updated,
+                        'contextualized': record.contextualized
+                    }
+                    for record in self.registry.values()
+                ]
             }
-        }
+            
+            # Add RAG system stats if available
+            if self.rag_system:
+                rag_stats = self.rag_system.get_stats()
+                stats.update(rag_stats)
+                
+            return stats
+            
+        except Exception as e:
+            print(f"❌ Error getting stats: {e}")
+            return {'error': str(e)}
 
 def main():
     """Main CLI interface - simplified commands"""
@@ -646,9 +756,9 @@ def main():
         print(f"  📚 Total Documents: {stats['total_documents']}")
         print(f"  📄 Total Chunks: {stats['total_chunks']}")
         print(f"  🧠 Contextualized: {stats['contextualized_documents']}")
-        print(f"  📝 Non-contextualized: {stats['non_contextualized_documents']}")
+        print(f"  📝 Non-contextualized: {stats['total_documents'] - stats['contextualized_documents']}")
         print(f"  🔧 Max Workers: {stats['config']['max_workers']}")
-        print(f"  🏷️  LLM Extraction: {'✅ Enabled' if stats['config']['llm_extraction_enabled'] else '❌ Disabled'}")
+        print(f"  🏷️  LLM Extraction: {'✅ Enabled' if stats['config']['enable_llm_extraction'] else '❌ Disabled'}")
         print()
         print("🎯 This is the CLEAN version - 75% smaller than the original!")
         print("   ✅ Removed legacy domain complexity")
