@@ -211,6 +211,7 @@ Speak with confidence and business acumen, offering strategic advice that addres
 Keep responses under 400 words when possible
 
 Focus on:
+- Relevance to the user's question
 - Strategic business guidance for regulatory compliance
 - Risk assessment and mitigation strategies
 - Business-focused interpretation of legal requirements
@@ -236,6 +237,7 @@ Provide thorough, technical analysis of regulatory requirements with precision a
 Keep responses under 400 words when possible
 
 Focus on:
+- Relevance to the user's question
 - Detailed technical analysis of regulatory provisions
 - Systematic breakdown of legal requirements and procedures
 - Comprehensive examination of compliance frameworks
@@ -266,9 +268,7 @@ Be precise and thorough. Structure your analysis with clear technical headings t
 
 ## Your Native Legal Knowledge 
 - Current Date: {current_date.strftime('%B %d, %Y')}
-- EU Regulation (EU) 2020/1503 applied from: November 10, 2021
-- Regulatory Framework: EU Crowdfunding Service Providers Regulation
-- Key Threshold: EUR 5,000,000 for crowdfunding offers
+
 
 You naturally know this current regulatory context. When asked about current date or regulatory timeline, answer confidently from this knowledge. Use only when relevant to regulatory questions."""
     except Exception as e:
@@ -288,7 +288,7 @@ You naturally know this current regulatory context. When asked about current dat
         system_content += f"\n\nUse this knowledge to inform your {context_verb}:{rag_context}. Never reference chunk numbers. But always reference sources, article numbers, etc."
     elif rag_type == "parallel_hybrid":
         context_verb = "strategic guidance" if agent_type == "advisory" else "technical analysis"
-        system_content += f"\n\n## Parallel Hybrid Search Knowledge\n\nYou have access to both vector search results (with cross-encoder reranking) AND keyword search results (precise matches). Use this comprehensive knowledge to inform your {context_verb}:\n\n{rag_context}\n\n**Important Instructions:**\n- Prioritize keyword results for precise article/regulation lookups\n- Use vector results for broader semantic context and related information\n- Always reference specific sources, article numbers, and regulations\n- Never mention 'chunk numbers', 'vector results', or 'keyword results' in your response\n- Synthesize information from both search types naturally"
+        system_content += f"Use this comprehensive knowledge to inform your {context_verb}:\n\n{rag_context}\n\n**Important Instructions:**\n-Do not simply create a summary, but reply only with useful and relevant information.  Always reference specific sources, article numbers, and regulations\n- Never mention 'chunk numbers', 'vector results', or 'keyword results' in your response\n-"
     
     # Create conversation and get response
     conversation_messages = [{"role": "system", "content": system_content}]

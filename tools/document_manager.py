@@ -85,7 +85,7 @@ class DocumentManager:
         self._load_registry()
         
         print(f"📚 Clean Document Manager initialized - {len(self.registry)} documents in registry")
-
+        
     def _load_registry(self):
         """Load document registry from JSON file"""
         try:
@@ -112,7 +112,7 @@ class DocumentManager:
         except Exception as e:
             print(f"⚠️  Error loading registry: {e}")
             self.registry = {}
-
+    
     def _save_registry(self):
         """Save document registry to JSON file"""
         try:
@@ -134,7 +134,7 @@ class DocumentManager:
                 json.dump(registry_data, f, indent=2)
         except Exception as e:
             print(f"❌ Error saving registry: {e}")
-
+    
     def _get_file_hash(self, filepath: str) -> str:
         """Calculate SHA-256 hash of file for change detection"""
         try:
@@ -143,12 +143,12 @@ class DocumentManager:
         except Exception as e:
             print(f"⚠️  Error calculating hash for {filepath}: {e}")
             return ""
-
+    
     def _init_rag_system(self):
         """Initialize RAG system if not already done"""
         if not self.rag_system:
             self.rag_system = OptimizedContextualRAGSystem()
-
+    
     def _add_documents_to_vectorstore(self, documents: List[Document]) -> bool:
         """Add processed documents to the vector store"""
         try:
@@ -158,7 +158,7 @@ class DocumentManager:
         except Exception as e:
             print(f"❌ Error adding documents to vectorstore: {e}")
             return False
-
+    
     def _smart_chunk_legal_markdown(self, text: str, chunk_size: int = 4000) -> List[str]:
         """Smart chunking for legal documents that preserves structure"""
         
@@ -269,7 +269,7 @@ class DocumentManager:
         except Exception as e:
             print(f"❌ Error loading document {filepath}: {e}")
             return []
-
+    
     def _contextualize_chunk_with_retry(self, chunk_data: Tuple[int, str, str, str]) -> Tuple[int, str, int, bool]:
         """Contextualize a single chunk with retry logic"""
         chunk_index, chunk_text, document_title, filepath = chunk_data
@@ -308,7 +308,7 @@ Contextualized chunk:"""
                     return (chunk_index, contextualized_text, len(contextualized_text), True)
                 else:
                     print(f"⚠️  Empty response for chunk {chunk_index}, attempt {attempt + 1}")
-                    
+                
             except Exception as e:
                 print(f"⚠️  Contextualization failed for chunk {chunk_index}, attempt {attempt + 1}: {e}")
                 if attempt == self.config.retry_attempts - 1:
@@ -418,22 +418,22 @@ Contextualized chunk:"""
             # Update registry
             chunk_ids = [chunk.metadata['chunk_id'] for chunk in processed_chunks]
             self.registry[filepath] = DocumentRecord(
-                filepath=filepath,
+                        filepath=filepath,
                 chunk_count=len(processed_chunks),
                 last_updated=time.strftime('%Y-%m-%d %H:%M:%S'),
                 file_hash=current_hash,
-                chunk_ids=chunk_ids,
-                contextualized=contextualize
-            )
-            
+                    chunk_ids=chunk_ids,
+                    contextualized=contextualize
+                )
+                
             self._save_registry()
             print(f"✅ Successfully added {filepath} with {len(processed_chunks)} chunks")
             return True
-            
+                
         except Exception as e:
             print(f"❌ Error adding document {filepath}: {e}")
             return False
-
+    
     def _remove_existing_chunks(self, filepath: str) -> bool:
         """Remove existing chunks for a document from the vector store"""
         try:
@@ -451,11 +451,11 @@ Contextualized chunk:"""
         except Exception as e:
             print(f"⚠️  Error removing existing chunks for {filepath}: {e}")
             return False
-
+    
     def update_document(self, filepath: str, contextualize: bool = True) -> bool:
         """Update an existing document"""
         return self.add_document(filepath, contextualize)
-
+    
     def remove_document(self, filepath: str) -> bool:
         """Remove a document from the vector database"""
         try:
@@ -469,19 +469,19 @@ Contextualized chunk:"""
             
             print(f"✅ Successfully removed {filepath}")
             return success
-            
+                
         except Exception as e:
             print(f"❌ Error removing document {filepath}: {e}")
             return False
-
+    
     def list_documents(self) -> List[DocumentRecord]:
         """List all documents in the registry"""
         return list(self.registry.values())
-
+    
     def get_document_info(self, filepath: str) -> Optional[DocumentRecord]:
         """Get information about a specific document"""
         return self.registry.get(filepath)
-
+    
     def validate_documents(self) -> Dict[str, List[str]]:
         """Validate all documents in the registry"""
         issues = {
@@ -498,7 +498,7 @@ Contextualized chunk:"""
                     issues['hash_mismatches'].append(filepath)
         
         return issues
-
+    
     def add_documents_batch(self, filepaths: List[str], contextualize: bool = True) -> Dict[str, bool]:
         """Add multiple documents in batch"""
         results = {}
@@ -578,11 +578,11 @@ def main():
         if documents:
             print(f"📚 Found {len(documents)} documents:")
             for doc in documents:
-                status = "✅ Contextualized" if doc.contextualized else "�� Standard"
+                status = "✅ Contextualized" if doc.contextualized else "📝 Standard"
                 print(f"  📄 {doc.filepath} - {doc.chunk_count} chunks - {status}")
         else:
             print("📭 No documents found")
-    
+            
     elif args.command == "info":
         if not args.filepath:
             print("❌ Error: 'info' command requires filepath")
@@ -596,7 +596,7 @@ def main():
         else:
             print(f"❌ Document not found: {args.filepath}")
             sys.exit(1)
-    
+            
     elif args.command == "validate":
         issues = manager.validate_documents()
         if any(issues.values()):
@@ -611,7 +611,7 @@ def main():
             sys.exit(1)
         else:
             print("✅ All documents validated successfully")
-    
+        
     elif args.command == "batch":
         if not args.filepath:
             print("❌ Error: 'batch' command requires filepath to batch JSON file")
@@ -642,7 +642,7 @@ def main():
     
     elif args.command == "stats":
         stats = manager.get_stats()
-        print("�� Clean Document Manager Statistics:")
+        print("📊 Clean Document Manager Statistics:")
         print(f"  📚 Total Documents: {stats['total_documents']}")
         print(f"  📄 Total Chunks: {stats['total_chunks']}")
         print(f"  🧠 Contextualized: {stats['contextualized_documents']}")

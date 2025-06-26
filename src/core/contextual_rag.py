@@ -747,10 +747,10 @@ class OptimizedContextualRAGSystem:
                     docs = self._optimized_chromadb_query(query_text, k)
                 except Exception as e:
                     logger.debug_optimization(f"ChromaDB optimization failed, using fallback: {e}")
-                
-                # Mark as vector search
-                for doc in docs:
-                    doc.metadata['_search_type'] = 'vector'
+            
+            # Mark as vector search
+            for doc in docs:
+                doc.metadata['_search_type'] = 'vector'
             
             return docs
                 
