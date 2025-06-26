@@ -169,7 +169,7 @@ class DocumentManager:
             self.rag_system.vectorstore.add_documents(embedding_documents)
             
             print(f"✅ Added {len(embedding_documents)} documents with hybrid embeddings and preserved original content")
-            return True
+                return True
                 
         except Exception as e:
             print(f"❌ Error adding documents to vectorstore: {e}")
@@ -272,9 +272,9 @@ class DocumentManager:
     def _load_and_chunk_document(self, filepath: str) -> List[Document]:
         """Load document and create chunks with metadata"""
         try:
-            loader = TextLoader(filepath, encoding='utf-8')
-            documents = loader.load()
-            
+        loader = TextLoader(filepath, encoding='utf-8')
+        documents = loader.load()
+        
             if not documents:
                 print(f"❌ No content loaded from {filepath}")
                 return []
@@ -339,7 +339,7 @@ Create a SHORT contextual summary that:
 Context summary:"""
 
                 response = self._genai_client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-1.5-flash-8b',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.1,
@@ -404,7 +404,7 @@ Context summary:"""
                         chunk.metadata['hybrid_content'] = hybrid_content
                         
                         processing_stats['contextualized_count'] += 1
-                    else:
+            else:
                         # Keep original content if contextualization failed
                         chunk.page_content = original_text
                         chunk.metadata['context_summary'] = ""
@@ -440,7 +440,7 @@ Context summary:"""
         try:
             metadata = self.metadata_extractor.extract_metadata(chunk_text)
             return (chunk_index, metadata, True)
-        except Exception as e:
+                    except Exception as e:
             print(f"⚠️  Metadata extraction failed for chunk {chunk_index}: {e}")
             return (chunk_index, {}, False)
 
@@ -481,19 +481,19 @@ Context summary:"""
             # Update registry
             chunk_ids = [chunk.metadata['chunk_id'] for chunk in processed_chunks]
             self.registry[filepath] = DocumentRecord(
-                filepath=filepath,
+                        filepath=filepath,
                 chunk_count=len(processed_chunks),
                 last_updated=datetime.now().isoformat(),
                 file_hash=current_hash,
-                chunk_ids=chunk_ids,
+                    chunk_ids=chunk_ids,
                 contextualized=contextualize and processing_stats['contextualized_count'] > 0
-            )
+                )
             self._save_registry()
-            
+                
             print(f"✅ Successfully added {filepath}")
             print(f"   📊 {len(processed_chunks)} chunks, {processing_stats['contextualized_count']} contextualized")
-            return True
-            
+                return True
+                
         except Exception as e:
             print(f"❌ Error adding document {filepath}: {e}")
             return False
@@ -508,14 +508,14 @@ Context summary:"""
             
             # Use ChromaDB delete functionality if available
             if hasattr(self.rag_system.vectorstore, '_collection'):
-                collection = self.rag_system.vectorstore._collection
+            collection = self.rag_system.vectorstore._collection
                 
                 # Delete by source metadata
                 try:
                     collection.delete(where={"source": filepath})
                     print(f"🗑️  Removed chunks for {filepath} using ChromaDB delete")
-                    return True
-                except Exception as e:
+            return True
+        except Exception as e:
                     print(f"⚠️  ChromaDB delete failed: {e}")
             
             # Fallback: recreate collection (more drastic but reliable)
@@ -557,16 +557,16 @@ Context summary:"""
     def remove_document(self, filepath: str) -> bool:
         """Remove a document from the vector database"""
         try:
-            if filepath not in self.registry:
+        if filepath not in self.registry:
                 print(f"⚠️  Document {filepath} not found in registry")
-                return False
-            
-            success = self._remove_existing_chunks(filepath)
-            if success:
-                del self.registry[filepath]
-                self._save_registry()
+            return False
+        
+        success = self._remove_existing_chunks(filepath)
+        if success:
+            del self.registry[filepath]
+            self._save_registry()
                 print(f"✅ Successfully removed {filepath}")
-            return success
+        return success
                 
         except Exception as e:
             print(f"❌ Error removing document {filepath}: {e}")
@@ -604,7 +604,7 @@ Context summary:"""
         try:
             for filepath in filepaths:
                 results[filepath] = self.add_document(filepath, contextualize)
-                
+            
         except Exception as e:
             print(f"❌ Error in batch processing: {e}")
             for filepath in filepaths:
@@ -638,7 +638,7 @@ Context summary:"""
                 
             return stats
             
-        except Exception as e:
+                            except Exception as e:
             print(f"❌ Error getting stats: {e}")
             return {'error': str(e)}
 
@@ -734,9 +734,9 @@ def main():
             if isinstance(batch_data, list):
                 filepaths = [item if isinstance(item, str) else item.get('filepath') for item in batch_data]
                 filepaths = [fp for fp in filepaths if fp]
-            else:
+                else:
                 print("❌ Error: Batch file must contain a JSON array")
-                sys.exit(1)
+                    sys.exit(1)
             
             contextualize = not args.no_contextualize
             results = manager.add_documents_batch(filepaths, contextualize)
