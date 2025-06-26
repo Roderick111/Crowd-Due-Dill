@@ -498,8 +498,6 @@ class OptimizedContextualRAGSystem:
         """
         Execute vector search followed by cross-encoder reranking.
         
-        This mimics the document manager's query_documents method for consistency.
-        
         Args:
             query_text: Query text
             k: Number of final results after reranking
@@ -508,31 +506,74 @@ class OptimizedContextualRAGSystem:
             List of reranked Document objects
         """
         try:
-            # Import document manager for reranking
-            from tools.document_manager import SimpleDocumentManager
+            # Import cross-encoder for reranking
+            try:
+                from sentence_transformers import CrossEncoder
+                cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", max_length=512)
+                reranking_available = True
+            except ImportError:
+                logger.debug_optimization("Cross-encoder not available, falling back to similarity search")
+                reranking_available = False
             
-            # Initialize document manager for reranking
-            doc_manager = SimpleDocumentManager()
+            # Get more documents for reranking (3x the final number)
+            initial_k = max(k * 3, 15)
             
-            # Use document manager's query method which includes reranking
-            reranked_results = doc_manager.query_documents(query_text, k=k, use_reranking=True)
-            
-            # Convert back to Document objects
-            docs = []
-            for result in reranked_results:
-                # Add reranking metadata
-                metadata = result.get('metadata', {})
-                metadata['_search_type'] = 'vector_reranked'
-                metadata['_rerank_score'] = result.get('rerank_score', 0.0)
-                metadata['_similarity_score'] = result.get('similarity_score', 0.0)
+            # Perform initial vector search with similarity scores
+            if hasattr(self.vectorstore, 'similarity_search_with_score'):
+                # Use similarity_search_with_score for distance/similarity scores
+                search_results = self.vectorstore.similarity_search_with_score(query_text, k=initial_k)
+                docs = []
                 
-                docs.append(Document(
-                    page_content=result['page_content'],
-                    metadata=metadata
-                ))
+                for doc, score in search_results:
+                    doc.metadata['_similarity_score'] = float(score)
+                    doc.metadata['_search_type'] = 'vector'
+                    docs.append(doc)
+            else:
+                # Fallback to regular similarity search
+                docs = self.vectorstore.similarity_search(query_text, k=initial_k)
+                for doc in docs:
+                    doc.metadata['_similarity_score'] = 0.0
+                    doc.metadata['_search_type'] = 'vector'
             
-            logger.debug_optimization(f"Vector+reranking: {len(docs)} results with cross-encoder scores")
-            return docs
+            if not docs:
+                logger.debug_optimization("No documents found in initial vector search")
+                return []
+            
+            # Apply reranking if available
+            if reranking_available and len(docs) > 1:
+                try:
+                    # Prepare query-document pairs for cross-encoder
+                    pairs = [[query_text, doc.page_content] for doc in docs]
+                    
+                    # Get reranking scores
+                    rerank_scores = cross_encoder.predict(pairs)
+                    
+                    # Add rerank scores to documents
+                    for i, doc in enumerate(docs):
+                        if i < len(rerank_scores):
+                            doc.metadata['_rerank_score'] = float(rerank_scores[i])
+                        else:
+                            doc.metadata['_rerank_score'] = 0.0
+                    
+                    # Sort by rerank score (descending)
+                    docs.sort(key=lambda d: d.metadata.get('_rerank_score', 0.0), reverse=True)
+                    
+                    logger.debug_optimization(f"Reranked {len(docs)} documents using cross-encoder")
+                    
+                except Exception as e:
+                    logger.debug_optimization(f"Reranking failed: {e}")
+                    # Add default rerank scores
+                    for doc in docs:
+                        doc.metadata['_rerank_score'] = 0.0
+            else:
+                # Add default rerank scores when reranking is not available
+                for doc in docs:
+                    doc.metadata['_rerank_score'] = 0.0
+            
+            # Return top k results
+            final_docs = docs[:k]
+            logger.debug_optimization(f"Vector+reranking: {len(final_docs)} final results")
+            return final_docs
             
         except Exception as e:
             logger.debug_optimization(f"Vector+reranking failed: {e}")
